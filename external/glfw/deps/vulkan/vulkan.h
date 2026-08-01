@@ -1,0 +1,17 @@
+#pragma once
+
+#include <glad/vulkan.h>
+
+#if defined(VK_VERSION_1_3) && !defined(VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME)
+#define VK_KHR_DYNAMIC_RENDERING_EXTENSION_NAME "VK_KHR_dynamic_rendering"
+
+typedef VkRenderingInfo VkRenderingInfoKHR;
+typedef VkRenderingAttachmentInfo VkRenderingAttachmentInfoKHR;
+typedef VkPipelineRenderingCreateInfo VkPipelineRenderingCreateInfoKHR;
+typedef void (VKAPI_PTR *PFN_vkCmdBeginRenderingKHR)(VkCommandBuffer commandBuffer, const VkRenderingInfo* pRenderingInfo);
+typedef void (VKAPI_PTR *PFN_vkCmdEndRenderingKHR)(VkCommandBuffer commandBuffer);
+
+#define VK_STRUCTURE_TYPE_RENDERING_INFO_KHR VK_STRUCTURE_TYPE_RENDERING_INFO
+#define VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO_KHR VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO
+#define VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO_KHR VK_STRUCTURE_TYPE_PIPELINE_RENDERING_CREATE_INFO
+#endif

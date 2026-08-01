@@ -1,0 +1,11 @@
+.vscode/
+build/
+install/
+scans/
+assets/
+assetsignore/
+assets_ok/
+/blender/
+todo
+preview
+test/
