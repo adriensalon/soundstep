@@ -15,13 +15,16 @@ add_subdirectory("${SOUNDSTEP_EXTERNAL_DIR}/stb" "${CMAKE_CURRENT_BINARY_DIR}/ex
 
 include("${SOUNDSTEP_EXTERNAL_DIR}/cmrc/CMakeRC.cmake")
 
-set(SOUNDSTEP_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../resource")
+set(SOUNDSTEP_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/..")
 cmrc_add_resource_library(soundstep_resource
     ALIAS soundstep::resource
     NAMESPACE soundstep_resource
     WHENCE "${SOUNDSTEP_RESOURCE_DIR}"
+    "${SOUNDSTEP_RESOURCE_DIR}/font/astral delight.ttf"
     "${SOUNDSTEP_RESOURCE_DIR}/font/new rodin.otf"
-    "${SOUNDSTEP_RESOURCE_DIR}/font/aktivgrotesk italic.ttf")
+    "${SOUNDSTEP_RESOURCE_DIR}/font/aktiv grotesk.ttf"
+    "${SOUNDSTEP_RESOURCE_DIR}/font/pp fraktion.otf"
+    "${SOUNDSTEP_RESOURCE_DIR}/font/fluent icons.ttf")
 
 file(GLOB_RECURSE soundstep_sources CONFIGURE_DEPENDS "*.cpp")
 add_executable(soundstep ${soundstep_sources})

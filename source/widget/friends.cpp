@@ -8,6 +8,7 @@
 
 #include <core/context.hpp>
 #include <widget/friends.hpp>
+#include <widget/icons.hpp>
 
 namespace soundstep {
 namespace {
@@ -92,7 +93,12 @@ namespace {
             | ImGuiTableFlags_Resizable
             | ImGuiTableFlags_ScrollY
             | ImGuiTableFlags_SizingStretchProp;
+        constexpr ImVec4 _transparent(0.0f, 0.0f, 0.0f, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_TableHeaderBg, _transparent);
+        ImGui::PushStyleColor(ImGuiCol_TableBorderStrong, _transparent);
+        ImGui::PushStyleColor(ImGuiCol_TableBorderLight, _transparent);
         if (!ImGui::BeginTable("##Friends", 6, _flags, ImVec2(0.0f, 240.0f))) {
+            ImGui::PopStyleColor(3);
             return;
         }
 
@@ -170,6 +176,7 @@ namespace {
         }
 
         ImGui::EndTable();
+        ImGui::PopStyleColor(3);
     }
 
     void _draw_remove_confirmation(context& ctx)
@@ -188,11 +195,11 @@ namespace {
         ImGui::Text("Remove %s?", _dialog._remove_name.c_str());
         ImGui::TextDisabled("Its cached catalog will also be removed.");
         const float _button_width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-        if (ImGui::Button("Cancel", ImVec2(_button_width, 0.0f))) {
+        if (ImGui::Button(icons::cancel, ImVec2(_button_width, 0.0f))) {
             ImGui::CloseCurrentPopup();
         }
         ImGui::SameLine();
-        if (ImGui::Button("Remove", ImVec2(_button_width, 0.0f))) {
+        if (ImGui::Button(icons::remove, ImVec2(_button_width, 0.0f))) {
             const bool _removed = ctx.try_action([&ctx] {
                 ctx.store.remove_peer(_dialog._remove_id);
             });
@@ -242,20 +249,18 @@ void draw_friends(context& ctx)
         _dialog._selected_id.clear();
     }
 
-    ImGui::SeparatorText("Friends");
-    ImGui::TextDisabled("Enabled libraries are combined with yours in the main view.");
     _draw_friend_table(ctx, _peers);
     const peer_record* _selected = _selected_friend(_peers);
 
     const float _friend_button_width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-    if (ImGui::Button("Refresh", ImVec2(_friend_button_width, 0.0f))) {
+    if (ImGui::Button(icons::refresh, ImVec2(_friend_button_width, 0.0f))) {
         ctx.network.refresh_catalogs_async();
         ctx.notify("Refreshing friend libraries...");
     }
     ImGui::SameLine();
     const bool _automatic_friend = _selected != nullptr && _selected->origin == peer_origin::lan;
     ImGui::BeginDisabled(_selected == nullptr || _automatic_friend);
-    if (ImGui::Button("Remove", ImVec2(_friend_button_width, 0.0f))) {
+    if (ImGui::Button(icons::remove, ImVec2(_friend_button_width, 0.0f))) {
         _dialog._remove_id = _selected->id;
         _dialog._remove_name = _selected->name;
         ImGui::OpenPopup("RemoveFriend");
@@ -267,16 +272,16 @@ void draw_friends(context& ctx)
     _draw_remove_confirmation(ctx);
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Share this instance");
+    ImGui::TextDisabled("Share this instance");
+    ImGui::Spacing();
     if (!_dialog._own_invite.empty()) {
         ImGui::SetNextItemWidth(-1.0f);
-        ImGui::InputTextMultiline(
+        ImGui::InputText(
             "##own_pairing_code",
             &_dialog._own_invite,
-            ImVec2(0.0f, 58.0f),
             ImGuiInputTextFlags_ReadOnly);
         if (ImGui::Button(
-                "Copy sharing code",
+                icons::copy_sharing_code,
                 ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
             ImGui::SetClipboardText(_dialog._own_invite.c_str());
             ctx.notify("Sharing code copied.");
@@ -284,13 +289,11 @@ void draw_friends(context& ctx)
     }
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Add friend");
+    ImGui::TextDisabled("Add friend");
+    ImGui::Spacing();
     ImGui::SetNextItemWidth(-1.0f);
-    ImGui::InputTextMultiline(
-        "##friend_pairing_code",
-        &_dialog._pairing_code,
-        ImVec2(0.0f, 58.0f));
-    if (ImGui::Button("Pair", ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+    ImGui::InputText("##friend_pairing_code", &_dialog._pairing_code);
+    if (ImGui::Button(icons::pair, ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
         const bool _paired = ctx.try_action([&ctx] {
             if (_dialog._pairing_code.empty()) {
                 throw widget_error("Pairing code cannot be empty");
@@ -303,7 +306,8 @@ void draw_friends(context& ctx)
         }
     }
 
-    if (ImGui::Button("Close", ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+    ImGui::Spacing();
+    if (ImGui::Button(icons::close, ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
         ImGui::CloseCurrentPopup();
     }
 

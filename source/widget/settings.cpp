@@ -9,6 +9,7 @@
 
 #include <core/config.hpp>
 #include <core/context.hpp>
+#include <widget/icons.hpp>
 #include <widget/settings.hpp>
 
 namespace soundstep {
@@ -29,6 +30,29 @@ namespace {
     {
         return config.library_path.u8string() != _dialog._library_path
             || config.scan_subdirectories != _dialog._scan_subdirectories;
+    }
+
+    bool _save_config(context& ctx, const configuration& config, bool rescan)
+    {
+        if (!ctx.try_action([&ctx, &config] { ctx.store.set_config(config); })) {
+            return false;
+        }
+        if (rescan
+            && !config.library_path.empty()
+            && ctx.scanner.status().state != library_scan_state::scanning
+            && ctx.try_action([&ctx] { ctx.scanner.scan(); })) {
+            ctx.notify("Scanning library...");
+        }
+        return true;
+    }
+
+    void _restore_config_fields(context& ctx)
+    {
+        const configuration _config = ctx.store.config();
+        _dialog._library_path = _config.library_path.u8string();
+        _dialog._scan_subdirectories = _config.scan_subdirectories;
+        _dialog._scan_on_startup = _config.scan_on_startup;
+        _dialog._lan_discovery_enabled = _config.lan_discovery_enabled;
     }
 
     std::string _storage_size_text(std::uint64_t bytes)
@@ -61,26 +85,13 @@ namespace {
         const bool _scan_running = _scan.state == library_scan_state::scanning;
         const bool _settings_changed = _scan_settings_changed(_config);
 
-        ImGui::BeginDisabled(
-            _scan_running
-            || _config.library_path.empty()
-            || _settings_changed);
-        if (ImGui::Button(
-                "Scan now",
-                ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+        ImGui::BeginDisabled(_scan_running || _config.library_path.empty() || _settings_changed);
+        if (ImGui::Button(icons::scan_now, ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
             if (ctx.try_action([&ctx] { ctx.scanner.scan(); })) {
                 ctx.notify("Scanning library...");
             }
         }
         ImGui::EndDisabled();
-
-        if (_settings_changed) {
-            ImGui::TextDisabled("Save library changes before scanning.");
-        } else if (_config.library_path.empty()) {
-            ImGui::TextDisabled("No music folder configured.");
-        } else if (!_scan_running && _scan.state == library_scan_state::idle) {
-            ImGui::TextDisabled("Scan the configured music folder.");
-        }
     }
 
 }
@@ -105,33 +116,61 @@ void draw_settings(context& ctx)
     }
 
     ImGui::SetNextWindowSize(ImVec2(560.0f, 0.0f), ImGuiCond_Appearing);
-    ImGui::SetNextWindowPos(
-        ImGui::GetMainViewport()->GetCenter(),
-        ImGuiCond_Always,
-        ImVec2(0.5f, 0.5f));
-    if (!ImGui::BeginPopupModal(
-            "Settings",
-            nullptr,
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+    ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    if (!ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
         return;
     }
 
-    ImGui::TextUnformatted("General");
-    ImGui::SetNextItemWidth(520.0f);
-    ImGui::InputText("Instance name", &_dialog._instance_name);
+    ImGui::TextDisabled("Device name");
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    const bool _name_submitted = ImGui::InputText(
+        "###Device name input",
+        &_dialog._instance_name,
+        ImGuiInputTextFlags_EnterReturnsTrue);
+    if (_name_submitted || ImGui::IsItemDeactivatedAfterEdit()) {
+        const bool _saved = ctx.try_action([&ctx] {
+            if (_dialog._instance_name.empty()) {
+                throw widget_error("Device name cannot be empty");
+            }
+            ctx.store.set_instance_name(_dialog._instance_name);
+        });
+        if (!_saved) {
+            _dialog._instance_name = ctx.store.instance().name;
+        }
+    }
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Library");
-    ImGui::SetNextItemWidth(520.0f);
-    ImGui::InputText("Music folder", &_dialog._library_path);
-    ImGui::TextDisabled("The folder whose supported audio files belong to this instance.");
-    ImGui::Checkbox("Include subfolders", &_dialog._scan_subdirectories);
-    ImGui::Checkbox("Scan when Soundstep starts", &_dialog._scan_on_startup);
+    ImGui::TextDisabled("Music folder");
+    ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
+    const bool _path_submitted = ImGui::InputText("###Music folder input", &_dialog._library_path, ImGuiInputTextFlags_EnterReturnsTrue);
+    if (_path_submitted || ImGui::IsItemDeactivatedAfterEdit()) {
+        configuration _config = ctx.store.config();
+        _config.library_path = std::filesystem::u8path(_dialog._library_path);
+        if (!_save_config(ctx, _config, true)) {
+            _restore_config_fields(ctx);
+        }
+    }
+    ImGui::TextDisabled("The folder whose supported audio files belong to this device");
+	if (ImGui::Checkbox("Include subfolders", &_dialog._scan_subdirectories)) {
+        configuration _config = ctx.store.config();
+        const bool _path_is_committed = _config.library_path.u8string() == _dialog._library_path;
+        _config.scan_subdirectories = _dialog._scan_subdirectories;
+        if (!_save_config(ctx, _config, _path_is_committed)) {
+            _restore_config_fields(ctx);
+        }
+    }
+    if (ImGui::Checkbox("Rescan when SoundStep starts", &_dialog._scan_on_startup)) {
+        configuration _config = ctx.store.config();
+        _config.scan_on_startup = _dialog._scan_on_startup;
+        if (!_save_config(ctx, _config, false)) {
+            _restore_config_fields(ctx);
+        }
+    }
     ImGui::Spacing();
     _draw_library_scan(ctx);
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Storage");
+    ImGui::TextDisabled("Storage");
     const music_storage_usage _usage = ctx.store.music_usage();
     const std::string _local_usage = _storage_size_text(_usage.local_bytes);
     const std::string _downloaded_usage = _storage_size_text(_usage.downloaded_bytes);
@@ -139,45 +178,21 @@ void draw_settings(context& ctx)
     ImGui::Text("Downloaded music: %s", _downloaded_usage.c_str());
 
     ImGui::Spacing();
-    ImGui::SeparatorText("Network");
-    ImGui::Checkbox("Enable automatic discovery on LAN", &_dialog._lan_discovery_enabled);
-    ImGui::TextDisabled("Other advertising Soundstep instances remain visible when this is disabled.");
+    ImGui::TextDisabled("Network");
+    if (ImGui::Checkbox("Enable automatic discovery on LAN", &_dialog._lan_discovery_enabled)) {
+        configuration _config = ctx.store.config();
+        _config.lan_discovery_enabled = _dialog._lan_discovery_enabled;
+        if (!_save_config(ctx, _config, false)) {
+            _restore_config_fields(ctx);
+        }
+    }
+    ImGui::TextDisabled("Other advertising Soundstep instances remain visible when this is disabled");
 
     ImGui::Spacing();
-    const float _button_width = (ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x) * 0.5f;
-    if (ImGui::Button("Cancel", ImVec2(_button_width, 0.0f))) {
+    ImGui::Spacing();
+    ImGui::Spacing();
+    if (ImGui::Button(icons::close, ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
         ImGui::CloseCurrentPopup();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Save", ImVec2(_button_width, 0.0f))) {
-        bool _scan_started = false;
-        const bool _saved = ctx.try_action([&ctx, &_scan_started] {
-            if (_dialog._instance_name.empty()) {
-                throw widget_error("Instance name cannot be empty");
-            }
-            const configuration _previous = ctx.store.config();
-            const configuration _updated {
-                std::filesystem::u8path(_dialog._library_path),
-                _dialog._scan_subdirectories,
-                _dialog._scan_on_startup,
-                _dialog._lan_discovery_enabled
-            };
-            ctx.store.set_config(_updated);
-
-            if (ctx.store.instance().name != _dialog._instance_name) {
-                ctx.store.set_instance_name(_dialog._instance_name);
-            }
-
-            const bool _scan_changed = _previous.library_path != _updated.library_path || _previous.scan_subdirectories != _updated.scan_subdirectories;
-            if (_scan_changed && !_updated.library_path.empty()) {
-                ctx.scanner.scan();
-                _scan_started = true;
-            }
-        });
-        if (_saved) {
-            ctx.notify(_scan_started ? "Settings saved. Scanning library..." : "Settings saved.");
-            ImGui::CloseCurrentPopup();
-        }
     }
 
     ImGui::EndPopup();

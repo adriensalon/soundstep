@@ -22,9 +22,9 @@ struct widget_error : std::runtime_error {
 };
 
 struct widget_fonts {
-    ImFont* body { nullptr };
-    ImFont* heading { nullptr };
-    ImFont* emphasis { nullptr };
+    ImFont* ui { nullptr };
+    ImFont* track_title { nullptr };
+    ImFont* subtitle { nullptr };
 };
 
 enum struct widget_message_kind {
@@ -50,25 +50,8 @@ struct context {
     std::optional<track> current_track;
     widget_message message;
 
-    void notify(
-        std::string text,
-        widget_message_kind kind = widget_message_kind::progress,
-        std::chrono::milliseconds duration = std::chrono::seconds(4))
-    {
-        message.text = std::move(text);
-        message.kind = kind;
-        message.expires_at = std::chrono::steady_clock::now() + duration;
-    }
-
-    [[nodiscard]] const widget_message* active_message() noexcept
-    {
-        if (message.text.empty()
-            || std::chrono::steady_clock::now() >= message.expires_at) {
-            message.text.clear();
-            return nullptr;
-        }
-        return &message;
-    }
+    void notify(std::string text, widget_message_kind kind = widget_message_kind::progress, std::chrono::milliseconds duration = std::chrono::seconds(4));
+    [[nodiscard]] const widget_message* active_message() noexcept;
 
     template <typename Operation>
     bool try_action(Operation&& operation) noexcept

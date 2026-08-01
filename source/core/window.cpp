@@ -33,10 +33,30 @@ window::window(context& ctx)
 
     try {
         _renderer = std::make_unique<renderer>(_window);
-        _ctx.fonts.body = _renderer->add_font("font/new rodin.otf", 16.0f);
-        _ctx.fonts.heading = _renderer->add_font("font/new rodin.otf", 24.0f);
-        _ctx.fonts.emphasis = _renderer->add_font("font/aktivgrotesk italic.ttf", 16.0f);
-        ImGui::GetIO().FontDefault = _ctx.fonts.body;
+        _ctx.fonts.ui = _renderer->add_font("font/pp fraktion.otf", 16.0f);
+        static constexpr ImWchar _icon_ranges[] = {
+            0xea54, 0xea54,
+            0xf13d, 0xf13d,
+            0xf150, 0xf150,
+            0xf190, 0xf190,
+            0xf32b, 0xf32b,
+            0xf34c, 0xf34c,
+            0xf369, 0xf369,
+            0xf36d, 0xf36d,
+            0xf4e4, 0xf4e4,
+            0xf569, 0xf569,
+            0xf5a1, 0xf5a1,
+            0xf5a8, 0xf5a8,
+            0xf605, 0xf605,
+            0xf628, 0xf628,
+            0xf68f, 0xf68f,
+            0xf6a9, 0xf6a9,
+            0
+        };
+        _renderer->merge_font("font/fluent icons.ttf", 16.0f, _icon_ranges);
+        _ctx.fonts.track_title = _renderer->add_font("font/new rodin.otf", 14.0f);
+        _ctx.fonts.subtitle = _renderer->add_font("font/aktiv grotesk.ttf", 16.0f);
+        ImGui::GetIO().FontDefault = _ctx.fonts.ui;
         if (_ctx.store.config().library_path.empty()) {
             open_settings(_ctx);
         }
