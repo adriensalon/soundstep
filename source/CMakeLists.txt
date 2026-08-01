@@ -45,5 +45,7 @@ target_link_libraries(soundstep PRIVATE
     OpenGL::GL)
 
 if(WIN32)
-    target_link_libraries(soundstep PRIVATE ws2_32 iphlpapi)
+    target_compile_definitions(soundstep PRIVATE
+        _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
+    target_link_libraries(soundstep PRIVATE ws2_32 iphlpapi runtimeobject)
 endif()

@@ -1,9 +1,14 @@
 #include <stdexcept>
 
 #include <GLFW/glfw3.h>
+#ifdef _WIN32
+#define GLFW_EXPOSE_NATIVE_WIN32
+#include <GLFW/glfw3native.h>
+#endif
 #include <imgui.h>
 
 #include <core/context.hpp>
+#include <core/integration.hpp>
 #include <core/window.hpp>
 #include <widget/app.hpp>
 #include <widget/settings.hpp>
@@ -33,6 +38,9 @@ window::window(context& ctx)
 
     try {
         _renderer = std::make_unique<renderer>(_window);
+#ifdef _WIN32
+        _media_transport = std::make_unique<system_media_transport>(glfwGetWin32Window(_native_window));
+#endif
         _ctx.fonts.ui = _renderer->add_font("font/pp fraktion.otf", 16.0f);
         static constexpr ImWchar _icon_ranges[] = {
             0xf13d, 0xf13d,
@@ -68,6 +76,7 @@ window::window(context& ctx)
 
 window::~window()
 {
+    _media_transport.reset();
     _ctx.covers.release_textures();
     _renderer.reset();
     _window.reset();
@@ -81,6 +90,9 @@ void window::run()
 
         _renderer->begin_frame();
         draw_app(_ctx);
+        if (_media_transport) {
+            _media_transport->update(_ctx);
+        }
         _renderer->render(_ctx.player.status());
 
         glfwSwapBuffers(_window.get());

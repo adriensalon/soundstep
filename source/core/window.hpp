@@ -11,6 +11,7 @@ struct GLFWwindow;
 namespace soundstep {
 
 struct context;
+struct system_media_transport;
 
 struct window_error : std::runtime_error {
     using std::runtime_error::runtime_error;
@@ -30,6 +31,7 @@ private:
     context& _ctx;
     std::shared_ptr<GLFWwindow> _window { nullptr };
     std::unique_ptr<renderer> _renderer { nullptr };
+    std::unique_ptr<system_media_transport> _media_transport { nullptr };
 };
 
 }

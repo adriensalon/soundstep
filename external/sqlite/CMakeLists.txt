@@ -4,8 +4,9 @@ set_target_properties(soundstep_sqlite PROPERTIES
     C_STANDARD 99
     C_STANDARD_REQUIRED ON)
 
-target_include_directories(soundstep_sqlite PUBLIC
-    "${CMAKE_CURRENT_SOURCE_DIR}")
+target_include_directories(soundstep_sqlite
+    PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}"
+    PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
 
 target_compile_definitions(soundstep_sqlite PRIVATE
     SQLITE_DEFAULT_FOREIGN_KEYS=1
