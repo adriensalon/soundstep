@@ -13,10 +13,12 @@
 #include <unordered_set>
 #include <vector>
 
+#include <im_anim.h>
 #include <imgui.h>
 #include <misc/cpp/imgui_stdlib.h>
 
 #include <core/context.hpp>
+#include <widget/animation.hpp>
 #include <widget/friends.hpp>
 #include <widget/icons.hpp>
 #include <widget/library.hpp>
@@ -59,6 +61,13 @@ namespace {
 
     _track_editor_state _editor;
 
+    struct _message_visual_state {
+        std::string _text;
+        widget_message_kind _kind { widget_message_kind::progress };
+    };
+
+    _message_visual_state _message_visual;
+
     constexpr float _library_list_horizontal_padding = 12.0f;
     constexpr float _track_card_padding = 8.0f;
     constexpr float _cover_text_spacing = 12.0f;
@@ -66,19 +75,51 @@ namespace {
 
     void _draw_offline_toggle(bool& active)
     {
-        const bool _use_active_colors = active;
-        if (_use_active_colors) {
-            const ImGuiStyle& _style = ImGui::GetStyle();
-            ImGui::PushStyleColor(ImGuiCol_Button, _style.Colors[ImGuiCol_HeaderActive]);
-            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, _style.Colors[ImGuiCol_SliderGrab]);
-            ImGui::PushStyleColor(ImGuiCol_ButtonActive, _style.Colors[ImGuiCol_SliderGrabActive]);
-        }
+        const ImGuiStyle& _style = ImGui::GetStyle();
+        const ImGuiID _owner = ImGui::GetID("##OfflineFilterMotion");
+        const ImVec2 _position = ImGui::GetCursorScreenPos();
+        const ImVec2 _size(
+            ImGui::CalcTextSize(icons::offline_only).x + _style.FramePadding.x * 2.0f,
+            ImGui::GetFrameHeight());
+        const bool _hovered = ImGui::IsMouseHoveringRect(
+            _position,
+            ImVec2(_position.x + _size.x, _position.y + _size.y));
+        const float _state = animation_tween(
+            _owner,
+            0x11001u,
+            active ? 1.0f : 0.0f,
+            animation_quick,
+            iam_ease_out_cubic);
+        const float _hover = animation_tween(
+            _owner,
+            0x11002u,
+            _hovered ? 1.0f : 0.0f,
+            animation_quick,
+            iam_ease_out_cubic);
+        const ImVec4 _resting = iam_get_blended_color(
+            _style.Colors[ImGuiCol_Button],
+            _style.Colors[ImGuiCol_HeaderActive],
+            _state,
+            iam_col_oklab);
+        const ImVec4 _hovered_color = iam_get_blended_color(
+            _style.Colors[ImGuiCol_ButtonHovered],
+            _style.Colors[ImGuiCol_SliderGrab],
+            _state,
+            iam_col_oklab);
+        const ImVec4 _color = iam_get_blended_color(
+            _resting,
+            _hovered_color,
+            _hover,
+            iam_col_oklab);
+        ImGui::PushStyleColor(ImGuiCol_Button, _color);
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, _color);
+        ImGui::PushStyleColor(
+            ImGuiCol_ButtonActive,
+            active ? _style.Colors[ImGuiCol_SliderGrabActive] : _style.Colors[ImGuiCol_ButtonActive]);
         if (ImGui::Button(icons::offline_only)) {
             active = !active;
         }
-        if (_use_active_colors) {
-            ImGui::PopStyleColor(3);
-        }
+        ImGui::PopStyleColor(3);
     }
 
     using _track_identity = std::tuple<
@@ -531,7 +572,7 @@ namespace {
             ImGui::TextDisabled("Local");
         } else {
             bool _saved = status.requested;
-            if (ImGui::Checkbox("Save offline", &_saved)) {
+            if (animation_toggle("Save offline", &_saved)) {
                 const bool _updated = ctx.try_action([&ctx, &value, _saved] {
                     if (_saved) {
                         ctx.offline.save(value);
@@ -594,7 +635,7 @@ namespace {
         ImGui::EndPopup();
     }
 
-    std::string _offline_status_text(const offline_status& status)
+    std::string _offline_status_text(const offline_status& status, float animated_progress)
     {
         switch (status.state) {
         case offline_state::off:
@@ -603,7 +644,8 @@ namespace {
             return status.can_remove ? "Offline" : "Local";
         case offline_state::downloading:
             if (status.total_bytes != 0) {
-                const unsigned _percentage = static_cast<unsigned>((std::min)(static_cast<double>(status.downloaded_bytes) * 100.0 / static_cast<double>(status.total_bytes), 100.0));
+                const unsigned _percentage = static_cast<unsigned>(
+                    (std::clamp)(animated_progress, 0.0f, 1.0f) * 100.0f + 0.5f);
                 return "Downloading " + std::to_string(_percentage) + "%";
             }
             return "Downloading";
@@ -619,6 +661,7 @@ namespace {
         _update_offline_message(ctx, value, _offline);
         ImGui::PushID(value.catalog_id.c_str());
         ImGui::PushID(value.id.c_str());
+        const ImGuiID _motion_owner = ImGui::GetID("##TrackCardMotion");
         constexpr float _card_height = 72.0f;
         constexpr float _cover_size = 56.0f;
         const ImVec2 _position = ImGui::GetCursorScreenPos();
@@ -627,9 +670,24 @@ namespace {
         const std::string _duration = _duration_text(value.duration_ms);
         const ImVec2 _duration_size = ImGui::CalcTextSize(_duration.c_str());
         const float _duration_x = _end.x - _track_card_padding - _duration_size.x;
-        const std::string _offline_text = _offline_status_text(_offline);
+        const float _download_target = _offline.state == offline_state::downloading
+                && _offline.total_bytes != 0
+            ? static_cast<float>((std::min)(static_cast<double>(_offline.downloaded_bytes)
+                      / static_cast<double>(_offline.total_bytes),
+                  1.0))
+            : 0.0f;
+        const float _download_progress = animation_tween(
+            _motion_owner,
+            0x12001u,
+            _download_target,
+            animation_relaxed,
+            iam_ease_out_cubic);
+        const std::string _offline_text = _offline_status_text(_offline, _download_progress);
         const ImVec2 _offline_size = ImGui::CalcTextSize(_offline_text.c_str());
-        const float _offline_x = _duration_x - ImGui::GetStyle().ItemSpacing.x - _offline_size.x;
+        const bool _downloading = _offline.state == offline_state::downloading;
+        const float _offline_indicator_width = _downloading ? 16.0f : 0.0f;
+        const float _offline_x = _duration_x - ImGui::GetStyle().ItemSpacing.x
+            - _offline_size.x - _offline_indicator_width;
         const float _right_x = _offline_text.empty() ? _duration_x : _offline_x;
         const bool _selected = _view._selected_catalog_id == value.catalog_id && _view._selected_track_id == value.id;
 
@@ -639,17 +697,48 @@ namespace {
         const bool _hovered = ImGui::IsItemHovered();
         _draw_track_menu(ctx, value, _offline);
 
+        const float _hover = animation_tween(
+            _motion_owner,
+            0x12002u,
+            _hovered ? 1.0f : 0.0f,
+            animation_quick,
+            iam_ease_out_cubic);
+        const float _selection = animation_tween(
+            _motion_owner,
+            0x12003u,
+            _selected ? 1.0f : 0.0f,
+            animation_normal,
+            iam_ease_out_cubic);
+
         ImDrawList* _draw = ImGui::GetWindowDrawList();
         const float _rounding = ImGui::GetStyle().FrameRounding;
-        if (_selected || _hovered) {
-            const ImU32 _background = ImGui::GetColorU32(_selected ? ImGuiCol_HeaderActive : ImGuiCol_HeaderHovered);
-            _draw->AddRectFilled(_position, _end, _background, _rounding);
+        const float _background_alpha = (std::max)(_hover, _selection);
+        if (_background_alpha > 0.001f) {
+            const ImVec4 _background = iam_get_blended_color(
+                ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered),
+                ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive),
+                _selection,
+                iam_col_oklab);
+            _draw->AddRectFilled(
+                _position,
+                _end,
+                animation_with_alpha(_background, _background_alpha),
+                _rounding);
         }
-        if (_selected) {
-            _draw->AddRect(_position, _end, ImGui::GetColorU32(ImGuiCol_CheckMark), _rounding, 0, 2.0f);
+        if (_selection > 0.001f) {
+            _draw->AddRect(
+                _position,
+                _end,
+                animation_with_alpha(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), _selection),
+                _rounding,
+                0,
+                1.0f + _selection);
         }
 
-        const ImVec2 _cover_min(_position.x + _track_card_padding, _position.y + _track_card_padding);
+        const float _cover_lift = -1.5f * _hover;
+        const ImVec2 _cover_min(
+            _position.x + _track_card_padding,
+            _position.y + _track_card_padding + _cover_lift);
         const ImVec2 _cover_max(_cover_min.x + _cover_size, _cover_min.y + _cover_size);
         const std::optional<renderer_texture> _cover = ctx.covers.texture(value);
         if (_cover) {
@@ -663,6 +752,15 @@ namespace {
                 _rounding);
         } else {
             _draw->AddRectFilled(_cover_min, _cover_max, IM_COL32_WHITE, _rounding);
+        }
+        if (_hover > 0.001f) {
+            _draw->AddRect(
+                _cover_min,
+                _cover_max,
+                animation_with_alpha(ImGui::GetStyleColorVec4(ImGuiCol_Text), _hover * 0.28f),
+                _rounding,
+                0,
+                1.0f);
         }
 
         ImFont* _title_font = ctx.fonts.track_title != nullptr ? ctx.fonts.track_title : ImGui::GetFont();
@@ -685,8 +783,30 @@ namespace {
 
         _draw->AddText(ImVec2(_duration_x, _position.y + (_card_height - _duration_size.y) * 0.5f), _secondary_color, _duration.c_str());
         if (!_offline_text.empty()) {
-            const ImU32 _offline_color = _offline.state == offline_state::failed ? IM_COL32(255, 89, 89, 255) : _secondary_color;
-            _draw->AddText(ImVec2(_offline_x, _position.y + (_card_height - _offline_size.y) * 0.5f), _offline_color, _offline_text.c_str());
+            ImGui::PushID(static_cast<int>(_offline.state));
+            const ImGuiID _status_owner = ImGui::GetID("##OfflineStatusMotion");
+            ImGui::PopID();
+            const float _status_alpha = animation_tween(
+                _status_owner,
+                0x12004u,
+                1.0f,
+                animation_normal,
+                iam_ease_out_cubic);
+            const ImVec4 _offline_color = _offline.state == offline_state::failed
+                ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f)
+                : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+            const float _status_y = _position.y + (_card_height - _offline_size.y) * 0.5f;
+            if (_downloading) {
+                animation_activity_indicator(
+                    _status_owner,
+                    ImVec2(_offline_x + 6.0f, _status_y + _offline_size.y * 0.5f),
+                    5.0f,
+                    animation_with_alpha(_offline_color, _status_alpha));
+            }
+            _draw->AddText(
+                ImVec2(_offline_x + _offline_indicator_width, _status_y + (1.0f - _status_alpha) * 3.0f),
+                animation_with_alpha(_offline_color, _status_alpha),
+                _offline_text.c_str());
         }
         ImGui::PopID();
         ImGui::PopID();
@@ -922,12 +1042,46 @@ void draw_library(context& ctx)
 
     ImGui::SetCursorPosX(_toolbar_start_x);
     const widget_message* _message = ctx.active_message();
-    if (_message == nullptr) {
-        ImGui::TextUnformatted(" ");
-    } else if (_message->kind == widget_message_kind::error) {
-        ImGui::TextColored(ImVec4(1.0f, 0.35f, 0.35f, 1.0f), "%s", _message->text.c_str());
-    } else {
-        ImGui::TextDisabled("%s", _message->text.c_str());
+    if (_message != nullptr) {
+        _message_visual._text = _message->text;
+        _message_visual._kind = _message->kind;
+    }
+    ImGui::PushID(_message_visual._text.c_str());
+    const ImGuiID _message_owner = ImGui::GetID("##MessageMotion");
+    const float _message_alpha = animation_tween(
+        _message_owner,
+        0x13001u,
+        _message != nullptr ? 1.0f : 0.0f,
+        animation_normal,
+        iam_ease_out_cubic);
+    ImGui::PopID();
+    const ImVec2 _message_position = ImGui::GetCursorScreenPos();
+    ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
+    if (!_message_visual._text.empty() && _message_alpha > 0.001f) {
+        const ImVec4 _message_color = _message_visual._kind == widget_message_kind::error
+            ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f)
+            : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+        const bool _show_activity = _message_visual._kind == widget_message_kind::progress
+            && (_message_visual._text.rfind("Scanning", 0) == 0
+                || _message_visual._text.rfind("Refreshing", 0) == 0
+                || _message_visual._text.rfind("Downloading", 0) == 0
+                || _message_visual._text.rfind("Retrying", 0) == 0);
+        const float _activity_width = _show_activity ? 16.0f : 0.0f;
+        if (_show_activity) {
+            animation_activity_indicator(
+                _message_owner,
+                ImVec2(
+                    _message_position.x + 5.0f,
+                    _message_position.y + ImGui::GetTextLineHeight() * 0.5f),
+                4.5f,
+                animation_with_alpha(_message_color, _message_alpha));
+        }
+        ImGui::GetWindowDrawList()->AddText(
+            ImVec2(
+                _message_position.x + _activity_width,
+                _message_position.y + (1.0f - _message_alpha) * 5.0f),
+            animation_with_alpha(_message_color, _message_alpha),
+            _message_visual._text.c_str());
     }
 
     _draw_track_cards(ctx, _peers, _available);

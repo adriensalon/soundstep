@@ -27,6 +27,11 @@ struct playback_status {
     double position_seconds { 0.0 };
     double duration_seconds { 0.0 };
     double buffered_seconds { 0.0 };
+    float rms_level { 0.0f };
+    float peak_level { 0.0f };
+    float bass_level { 0.0f };
+    float mid_level { 0.0f };
+    float treble_level { 0.0f };
 };
 
 struct playback {

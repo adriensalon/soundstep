@@ -16,10 +16,9 @@ namespace icons {
     inline constexpr char refresh[] = u8"\uf190 Refresh";
     inline constexpr char remove[] = u8"\uf34c Remove";
     inline constexpr char cancel[] = u8"\uf369 Cancel";
-    inline constexpr char copy_sharing_code[] = u8"\uf32b Copy sharing code";
+    inline constexpr char copy_sharing_code[] = u8"\uf32b Copy";
     inline constexpr char pair[] = u8"\uf4e4 Pair";
     inline constexpr char close[] = u8"\uf369 Close";
-    inline constexpr char scan_now[] = u8"\uea54 Scan now";
     inline constexpr char retry_download[] = u8"\uf13d Retry download";
     inline constexpr char cancel_download[] = u8"\uf36d Cancel download";
 

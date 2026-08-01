@@ -35,7 +35,6 @@ window::window(context& ctx)
         _renderer = std::make_unique<renderer>(_window);
         _ctx.fonts.ui = _renderer->add_font("font/pp fraktion.otf", 16.0f);
         static constexpr ImWchar _icon_ranges[] = {
-            0xea54, 0xea54,
             0xf13d, 0xf13d,
             0xf150, 0xf150,
             0xf190, 0xf190,
@@ -82,7 +81,7 @@ void window::run()
 
         _renderer->begin_frame();
         draw_app(_ctx);
-        _renderer->render();
+        _renderer->render(_ctx.player.status());
 
         glfwSwapBuffers(_window.get());
     }

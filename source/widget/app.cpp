@@ -17,7 +17,12 @@ void draw_app(context& ctx)
     const ImVec2 _window_padding = ImGui::GetStyle().WindowPadding;
     ImGui::SetNextWindowPos(_viewport->WorkPos);
     ImGui::SetNextWindowSize(_viewport->WorkSize);
-    constexpr ImGuiWindowFlags _window_flags = ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoSavedSettings;
+    constexpr ImGuiWindowFlags _window_flags = ImGuiWindowFlags_NoTitleBar
+        | ImGuiWindowFlags_NoResize
+        | ImGuiWindowFlags_NoMove
+        | ImGuiWindowFlags_NoCollapse
+        | ImGuiWindowFlags_NoSavedSettings
+        | ImGuiWindowFlags_NoBackground;
     ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));

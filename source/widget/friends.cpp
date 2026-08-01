@@ -1,12 +1,15 @@
+#include <algorithm>
 #include <chrono>
 #include <cstdint>
 #include <string>
 #include <vector>
 
+#include <im_anim.h>
 #include <imgui.h>
 #include <misc/cpp/imgui_stdlib.h>
 
 #include <core/context.hpp>
+#include <widget/animation.hpp>
 #include <widget/friends.hpp>
 #include <widget/icons.hpp>
 
@@ -22,6 +25,8 @@ namespace {
         std::string _remove_id;
         std::string _remove_name;
         bool _open_requested { false };
+        bool _closing { false };
+        bool _pairing_error { false };
     };
 
     _friends_dialog _dialog;
@@ -145,7 +150,7 @@ namespace {
 
             ImGui::TableSetColumnIndex(2);
             bool _library_enabled = _record.library_enabled;
-            if (ImGui::Checkbox("##LibraryEnabled", &_library_enabled)) {
+            if (animation_toggle("##LibraryEnabled", &_library_enabled, true)) {
                 const std::string _peer_id = _record.id;
                 ctx.try_action([&ctx, _peer_id, _library_enabled] {
                     ctx.store.set_peer_library_enabled(_peer_id, _library_enabled);
@@ -222,6 +227,8 @@ void open_friends(context& ctx)
     _dialog._own_invite.clear();
     _dialog._remove_id.clear();
     _dialog._remove_name.clear();
+    _dialog._closing = false;
+    _dialog._pairing_error = false;
     ctx.try_action([&ctx] {
         _dialog._own_invite = ctx.network.create_pairing_code();
     });
@@ -235,14 +242,35 @@ void draw_friends(context& ctx)
         _dialog._open_requested = false;
     }
 
-    ImGui::SetNextWindowSize(ImVec2(760.0f, 620.0f), ImGuiCond_Appearing);
+    const bool _popup_open = ImGui::IsPopupOpen("Friends");
+    const ImGuiID _dialog_motion_owner = ImGui::GetID("##FriendsDialogMotion");
+    const float _dialog_reveal = animation_tween(
+        _dialog_motion_owner,
+        0x31001u,
+        _popup_open && !_dialog._closing ? 1.0f : 0.0f,
+        animation_normal,
+        iam_ease_out_cubic);
+    const float _dialog_scale = 0.97f + 0.03f * _dialog_reveal;
+    ImGui::SetNextWindowSize(
+        ImVec2(760.0f * _dialog_scale, 0.0f),
+        ImGuiCond_Always);
     ImGui::SetNextWindowPos(
-        ImGui::GetMainViewport()->GetCenter(),
+        ImVec2(
+            ImGui::GetMainViewport()->GetCenter().x,
+            ImGui::GetMainViewport()->GetCenter().y + (1.0f - _dialog_reveal) * 10.0f),
         ImGuiCond_Always,
         ImVec2(0.5f, 0.5f));
-    if (!ImGui::BeginPopupModal("Friends", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+    ImGui::SetNextWindowBgAlpha(
+        ImGui::GetStyleColorVec4(ImGuiCol_PopupBg).w * (0.72f + 0.28f * _dialog_reveal));
+    if (!ImGui::BeginPopupModal(
+            "Friends",
+            nullptr,
+            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
         return;
     }
+    ImGui::PushStyleVar(
+        ImGuiStyleVar_Alpha,
+        ImGui::GetStyle().Alpha * (std::max)(0.02f, _dialog_reveal));
 
     std::vector<peer_record> _peers = ctx.store.peers();
     if (_selected_friend(_peers) == nullptr) {
@@ -275,14 +303,19 @@ void draw_friends(context& ctx)
     ImGui::TextDisabled("Share this instance");
     ImGui::Spacing();
     if (!_dialog._own_invite.empty()) {
-        ImGui::SetNextItemWidth(-1.0f);
+        const float _copy_button_width = ImGui::CalcTextSize(icons::copy_sharing_code).x
+            + ImGui::GetStyle().FramePadding.x * 2.0f;
+        const float _invite_input_width = (std::max)(1.0f,
+            ImGui::GetContentRegionAvail().x
+                - ImGui::GetStyle().ItemSpacing.x
+                - _copy_button_width);
+        ImGui::SetNextItemWidth(_invite_input_width);
         ImGui::InputText(
             "##own_pairing_code",
             &_dialog._own_invite,
             ImGuiInputTextFlags_ReadOnly);
-        if (ImGui::Button(
-                icons::copy_sharing_code,
-                ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+        ImGui::SameLine();
+        if (ImGui::Button(icons::copy_sharing_code, ImVec2(_copy_button_width, 0.0f))) {
             ImGui::SetClipboardText(_dialog._own_invite.c_str());
             ctx.notify("Sharing code copied.");
         }
@@ -291,9 +324,42 @@ void draw_friends(context& ctx)
     ImGui::Spacing();
     ImGui::TextDisabled("Add friend");
     ImGui::Spacing();
-    ImGui::SetNextItemWidth(-1.0f);
+    const float _pair_button_width = ImGui::CalcTextSize(icons::pair).x
+        + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float _pairing_input_width = (std::max)(1.0f,
+        ImGui::GetContentRegionAvail().x
+            - ImGui::GetStyle().ItemSpacing.x
+            - _pair_button_width);
+    ImGui::SetNextItemWidth(_pairing_input_width);
+    const ImGuiID _pairing_error_owner = ImGui::GetID("##PairingCodeError");
+    const float _pairing_shake = iam_shake(
+        _pairing_error_owner,
+        7.0f,
+        28.0f,
+        0.38f,
+        ImGui::GetIO().DeltaTime);
+    const ImVec2 _pairing_position = ImGui::GetCursorScreenPos();
+    ImGui::SetCursorScreenPos(
+        ImVec2(_pairing_position.x + _pairing_shake, _pairing_position.y));
+    const float _pairing_error_reveal = animation_tween(
+        _pairing_error_owner,
+        0x31002u,
+        _dialog._pairing_error ? 1.0f : 0.0f,
+        animation_quick,
+        iam_ease_out_cubic);
+    const ImVec4 _pairing_background = iam_get_blended_color(
+        ImGui::GetStyleColorVec4(ImGuiCol_FrameBg),
+        ImVec4(0.42f, 0.12f, 0.12f, 1.0f),
+        _pairing_error_reveal,
+        iam_col_oklab);
+    ImGui::PushStyleColor(ImGuiCol_FrameBg, _pairing_background);
     ImGui::InputText("##friend_pairing_code", &_dialog._pairing_code);
-    if (ImGui::Button(icons::pair, ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+    ImGui::PopStyleColor();
+    if (ImGui::IsItemEdited()) {
+        _dialog._pairing_error = false;
+    }
+    ImGui::SameLine();
+    if (ImGui::Button(icons::pair, ImVec2(_pair_button_width, 0.0f))) {
         const bool _paired = ctx.try_action([&ctx] {
             if (_dialog._pairing_code.empty()) {
                 throw widget_error("Pairing code cannot be empty");
@@ -302,15 +368,25 @@ void draw_friends(context& ctx)
             _dialog._pairing_code.clear();
         });
         if (_paired) {
+            _dialog._pairing_error = false;
             ctx.notify("Friend paired.");
+        } else {
+            _dialog._pairing_error = true;
+            iam_trigger_shake(_pairing_error_owner);
         }
     }
 
     ImGui::Spacing();
+    ImGui::Spacing();
+    ImGui::Spacing();
     if (ImGui::Button(icons::close, ImVec2(ImGui::GetContentRegionAvail().x, 0.0f))) {
+        _dialog._closing = true;
+    }
+    if (_dialog._closing && _dialog_reveal <= 0.02f) {
         ImGui::CloseCurrentPopup();
     }
 
+    ImGui::PopStyleVar();
     ImGui::EndPopup();
 }
 
