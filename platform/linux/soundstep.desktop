@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Soundstep
+Comment=Listen to and share music with friends
+Exec=soundstep
+Icon=soundstep
+Terminal=false
+Categories=AudioVideo;Audio;Player;
+StartupWMClass=soundstep

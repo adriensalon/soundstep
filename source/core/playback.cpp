@@ -39,6 +39,8 @@ namespace {
             return ma_encoding_format_flac;
         case audio_extension::ogg:
             return ma_encoding_format_vorbis;
+        case audio_extension::unknown:
+            throw playback_error("Audio extension is not supported");
         }
         throw playback_error("Audio extension is not supported");
     }

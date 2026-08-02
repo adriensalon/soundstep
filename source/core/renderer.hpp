@@ -8,6 +8,9 @@
 #include <imgui.h>
 
 struct GLFWwindow;
+#ifdef __ANDROID__
+struct ANativeWindow;
+#endif
 
 namespace soundstep {
 
@@ -24,7 +27,11 @@ struct renderer_texture {
 };
 
 struct renderer {
+#ifdef __ANDROID__
+    explicit renderer(ANativeWindow* window);
+#else
     explicit renderer(std::shared_ptr<GLFWwindow> window);
+#endif
     ~renderer();
 
     renderer(const renderer& other) = delete;
@@ -46,7 +53,11 @@ struct renderer {
 private:
     struct background_program;
 
+#ifdef __ANDROID__
+    ANativeWindow* _window { nullptr };
+#else
     std::shared_ptr<GLFWwindow> _window { nullptr };
+#endif
     std::unique_ptr<background_program> _background;
 };
 

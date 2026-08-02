@@ -1,6 +1,8 @@
 #include <algorithm>
 
+#ifndef __ANDROID__
 #include <GLFW/glfw3.h>
+#endif
 #include <imgui.h>
 
 #include <core/context.hpp>
@@ -15,6 +17,7 @@
 namespace soundstep {
 namespace {
 
+#ifndef __ANDROID__
     constexpr float _title_bar_height = 44.0f;
     constexpr float _window_button_width = 46.0f;
     constexpr float _title_horizontal_inset = 29.0f;
@@ -188,6 +191,7 @@ namespace {
         ImGui::SetCursorScreenPos(_position);
         ImGui::Dummy(ImVec2(_width, _title_bar_height));
     }
+#endif
 
 }
 
@@ -208,7 +212,11 @@ void draw_app(context& ctx, GLFWwindow* window)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7.0f, 6.0f));
     if (ImGui::Begin("##SoundstepMain", nullptr, _window_flags)) {
+#ifndef __ANDROID__
         _draw_title_bar(ctx, window);
+#else
+        static_cast<void>(window);
+#endif
         constexpr float _player_height = 112.0f;
         const float _library_player_gap = ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y;
         const float _content_start_y = ImGui::GetCursorPosY();

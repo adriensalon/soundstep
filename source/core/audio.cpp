@@ -730,6 +730,8 @@ std::string_view audio_extension_name(audio_extension extension) noexcept
         return "flac";
     case audio_extension::ogg:
         return "ogg";
+    case audio_extension::unknown:
+        return { };
     }
     return { };
 }
@@ -803,6 +805,8 @@ std::string_view audio_content_type(audio_extension extension) noexcept
         return "audio/flac";
     case audio_extension::ogg:
         return "audio/ogg";
+    case audio_extension::unknown:
+        return "application/octet-stream";
     }
     return "application/octet-stream";
 }

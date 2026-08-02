@@ -3,9 +3,17 @@ plugins {
 }
 
 val assetsDir = project.findProperty("assetsDir") as String?
-val targetName = project.findProperty("targetName") as String? 
-    ?: error("Gradle property 'targetName' must be provided (e.g. -PtargetName=mygame)")
-val gamePackage = "com.lucaria.lib$targetName"
+val nativeLibDir = project.findProperty("nativeLibDir") as String?
+    ?: error("Gradle property 'nativeLibDir' must be provided")
+val androidBuildDir = project.findProperty("androidBuildDir") as String?
+val packageDir = project.findProperty("packageDir") as String?
+    ?: error("Gradle property 'packageDir' must be provided")
+val targetName = project.findProperty("targetName") as String? ?: "soundstep"
+val gamePackage = "com.soundstep.app"
+
+if (androidBuildDir != null) {
+    layout.buildDirectory.set(file(androidBuildDir))
+}
 
 android {
     namespace = gamePackage
@@ -25,6 +33,7 @@ android {
             srcDir(assetsDir)
         }
     }
+    sourceSets["main"].jniLibs.srcDir(nativeLibDir)
 
     buildTypes {
         release {
@@ -44,4 +53,20 @@ android {
 dependencies {
     // You can actually remove everything,
     // but leaving appcompat/material out is good to avoid useless deps.
+}
+
+tasks.register<Copy>("stageDebugApk") {
+    dependsOn("assembleDebug")
+    from(layout.buildDirectory.dir("outputs/apk/debug"))
+    include("*.apk")
+    into(file(packageDir))
+    rename { "$targetName-debug.apk" }
+}
+
+tasks.register<Copy>("stageReleaseApk") {
+    dependsOn("assembleRelease")
+    from(layout.buildDirectory.dir("outputs/apk/release"))
+    include("*.apk")
+    into(file(packageDir))
+    rename { "$targetName-release.apk" }
 }

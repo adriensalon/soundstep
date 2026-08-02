@@ -1,3 +1,6 @@
+#include <core/context.hpp>
+#include <core/integration.hpp>
+
 #ifdef _WIN32
 
 #include <algorithm>
@@ -14,8 +17,6 @@
 #include <winrt/Windows.Media.h>
 #include <winrt/base.h>
 
-#include <core/integration.hpp>
-#include <core/context.hpp>
 #include <widget/library.hpp>
 
 namespace soundstep {

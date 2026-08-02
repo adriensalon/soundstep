@@ -19,8 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-val targetName = settings.startParameter.projectProperties["targetName"] ?: "Lucaria"
-
+val targetName = settings.startParameter.projectProperties["targetName"] ?: "soundstep"
 
 rootProject.name = targetName
- 

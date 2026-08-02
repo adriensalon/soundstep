@@ -6,15 +6,22 @@
 #include <utility>
 #include <vector>
 
+#include <imgui.h>
+
+#ifdef __ANDROID__
+#include <GLES3/gl3.h>
+#include <android/native_window.h>
+#include <backends/imgui_impl_android.h>
+#else
 #define GLFW_INCLUDE_NONE
 #define GLAD_GL_IMPLEMENTATION
 #include <GLFW/glfw3.h>
 #include <backends/imgui_impl_glfw.h>
+#include <glad/gl.h>
+#endif
 #include <backends/imgui_impl_opengl3.h>
 #include <cmrc/cmrc.hpp>
-#include <glad/gl.h>
 #include <im_anim.h>
-#include <imgui.h>
 
 #include <core/playback.hpp>
 #include <core/renderer.hpp>
@@ -28,8 +35,16 @@ CMRC_DECLARE(soundstep_resource);
 namespace soundstep {
 namespace {
 
-    constexpr const char* _background_vertex_shader = R"glsl(
-#version 330 core
+#ifdef __ANDROID__
+#define SOUNDSTEP_GLSL_VERSION "#version 300 es\n"
+#define SOUNDSTEP_GLSL_PRECISION "precision highp float;\n"
+#else
+#define SOUNDSTEP_GLSL_VERSION "#version 330 core\n"
+#define SOUNDSTEP_GLSL_PRECISION ""
+#endif
+
+    constexpr const char* _background_vertex_shader =
+SOUNDSTEP_GLSL_VERSION R"glsl(
 
 out vec2 vertex_uv;
 
@@ -48,8 +63,8 @@ void main()
 }
 )glsl";
 
-    constexpr const char* _background_fragment_shader = R"glsl(
-#version 330 core
+    constexpr const char* _background_fragment_shader =
+SOUNDSTEP_GLSL_VERSION SOUNDSTEP_GLSL_PRECISION R"glsl(
 
 in vec2 vertex_uv;
 out vec4 fragment_color;
@@ -149,6 +164,9 @@ void main()
     fragment_color = vec4(vec3(clamp(luminance, 0.0, 0.24)), 1.0);
 }
 )glsl";
+
+#undef SOUNDSTEP_GLSL_PRECISION
+#undef SOUNDSTEP_GLSL_VERSION
 
     GLuint _compile_shader(GLenum type, const char* source)
     {
@@ -377,12 +395,19 @@ struct renderer::background_program {
     float _beat_cooldown { 0.0f };
 };
 
+#ifdef __ANDROID__
+renderer::renderer(ANativeWindow* window)
+    : _window(window)
+#else
 renderer::renderer(std::shared_ptr<GLFWwindow> window)
     : _window(std::move(window))
+#endif
 {
+#ifndef __ANDROID__
     if (gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress)) == 0) {
         throw renderer_error("Failed to initialize the OpenGL function loader");
     }
+#endif
 
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
@@ -400,13 +425,30 @@ renderer::renderer(std::shared_ptr<GLFWwindow> window)
     _style.GrabRounding = _rounding;
     _style.TabRounding = _rounding;
 
+#ifdef __ANDROID__
+    if (!ImGui_ImplAndroid_Init(_window)) {
+        ImGui::DestroyContext();
+        throw renderer_error("Failed to initialize the ImGui Android backend");
+    }
+#else
     if (!ImGui_ImplGlfw_InitForOpenGL(_window.get(), true)) {
         ImGui::DestroyContext();
         throw renderer_error("Failed to initialize the ImGui GLFW backend");
     }
+#endif
 
-    if (!ImGui_ImplOpenGL3_Init("#version 330")) {
+    if (!ImGui_ImplOpenGL3_Init(
+#ifdef __ANDROID__
+            "#version 300 es"
+#else
+            "#version 330"
+#endif
+            )) {
+#ifdef __ANDROID__
+        ImGui_ImplAndroid_Shutdown();
+#else
         ImGui_ImplGlfw_Shutdown();
+#endif
         ImGui::DestroyContext();
         throw renderer_error("Failed to initialize the ImGui OpenGL backend");
     }
@@ -415,7 +457,11 @@ renderer::renderer(std::shared_ptr<GLFWwindow> window)
         _background = std::make_unique<background_program>();
     } catch (...) {
         ImGui_ImplOpenGL3_Shutdown();
+#ifdef __ANDROID__
+        ImGui_ImplAndroid_Shutdown();
+#else
         ImGui_ImplGlfw_Shutdown();
+#endif
         ImGui::DestroyContext();
         throw;
     }
@@ -425,7 +471,11 @@ renderer::~renderer()
 {
     _background.reset();
     ImGui_ImplOpenGL3_Shutdown();
+#ifdef __ANDROID__
+    ImGui_ImplAndroid_Shutdown();
+#else
     ImGui_ImplGlfw_Shutdown();
+#endif
     ImGui::DestroyContext();
 }
 
@@ -499,7 +549,11 @@ void renderer::merge_font(
 void renderer::begin_frame()
 {
     ImGui_ImplOpenGL3_NewFrame();
+#ifdef __ANDROID__
+    ImGui_ImplAndroid_NewFrame();
+#else
     ImGui_ImplGlfw_NewFrame();
+#endif
     ImGui::NewFrame();
     iam_update_begin_frame();
     iam_clip_update(ImGui::GetIO().DeltaTime);
@@ -511,7 +565,12 @@ void renderer::render(const playback_status& playback)
 
     int _width = 0;
     int _height = 0;
+#ifdef __ANDROID__
+    _width = ANativeWindow_getWidth(_window);
+    _height = ANativeWindow_getHeight(_window);
+#else
     glfwGetFramebufferSize(_window.get(), &_width, &_height);
+#endif
     glViewport(0, 0, _width, _height);
     glClearColor(0.055f, 0.055f, 0.055f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
