@@ -67,7 +67,6 @@ target_link_libraries(soundstep PRIVATE
     soundstep::resource)
 
 if(ANDROID)
-    target_compile_definitions(soundstep PRIVATE SOUNDSTEP_PLATFORM_ANDROID)
     target_compile_options(soundstep PRIVATE -Wno-deprecated-declarations)
     target_link_libraries(soundstep PRIVATE
         soundstep_native_app_glue
