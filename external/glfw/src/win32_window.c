@@ -35,6 +35,10 @@
 #include <windowsx.h>
 #include <shellapi.h>
 
+#ifndef SM_CXPADDEDBORDER
+#define SM_CXPADDEDBORDER 92
+#endif
+
 // Returns the window style for the specified window
 //
 static DWORD getWindowStyle(const _GLFWwindow* window)
@@ -55,7 +59,13 @@ static DWORD getWindowStyle(const _GLFWwindow* window)
                 style |= WS_MAXIMIZEBOX | WS_THICKFRAME;
         }
         else
+        {
             style |= WS_POPUP;
+
+            // Keep native edge and corner resizing for client-decorated windows.
+            if (window->resizable)
+                style |= WS_MAXIMIZEBOX | WS_THICKFRAME;
+        }
     }
 
     return style;
@@ -1148,6 +1158,75 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
         case WM_ERASEBKGND:
         {
             return TRUE;
+        }
+
+        case WM_NCCALCSIZE:
+        {
+            // Let the client area cover the native resize frame of an
+            // undecorated window so no system-colored strip remains visible.
+            if (wParam && !window->decorated && !window->monitor)
+                return 0;
+
+            break;
+        }
+
+        case WM_NCHITTEST:
+        {
+            if (!window->decorated && window->resizable &&
+                !window->monitor && !IsZoomed(hWnd))
+            {
+                int frameX, frameY, padding, minimumFrame;
+                RECT rect;
+                const POINT cursor =
+                {
+                    GET_X_LPARAM(lParam),
+                    GET_Y_LPARAM(lParam)
+                };
+
+                if (_glfwIsWindows10Version1607OrGreaterWin32())
+                {
+                    const UINT dpi = GetDpiForWindow(hWnd);
+                    frameX = GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi);
+                    frameY = GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi);
+                    padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
+                    minimumFrame = MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI);
+                }
+                else
+                {
+                    frameX = GetSystemMetrics(SM_CXSIZEFRAME);
+                    frameY = GetSystemMetrics(SM_CYSIZEFRAME);
+                    padding = GetSystemMetrics(SM_CXPADDEDBORDER);
+                    minimumFrame = 10;
+                }
+
+                GetWindowRect(hWnd, &rect);
+                frameX = _glfw_max(frameX + padding, minimumFrame);
+                frameY = _glfw_max(frameY + padding, minimumFrame);
+
+                const GLFWbool left = cursor.x < rect.left + frameX;
+                const GLFWbool right = cursor.x >= rect.right - frameX;
+                const GLFWbool top = cursor.y < rect.top + frameY;
+                const GLFWbool bottom = cursor.y >= rect.bottom - frameY;
+
+                if (top && left)
+                    return HTTOPLEFT;
+                if (top && right)
+                    return HTTOPRIGHT;
+                if (bottom && left)
+                    return HTBOTTOMLEFT;
+                if (bottom && right)
+                    return HTBOTTOMRIGHT;
+                if (left)
+                    return HTLEFT;
+                if (right)
+                    return HTRIGHT;
+                if (top)
+                    return HTTOP;
+                if (bottom)
+                    return HTBOTTOM;
+            }
+
+            break;
         }
 
         case WM_NCACTIVATE:

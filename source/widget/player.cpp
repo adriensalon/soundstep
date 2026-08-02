@@ -84,6 +84,28 @@ namespace {
             _label = "unknown";
         }
 
+        ImVec4 _background = ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive);
+        ImVec4 _foreground = ImGui::GetStyleColorVec4(ImGuiCol_Text);
+        switch (extension) {
+        case audio_extension::mp3:
+            _background = ImVec4(0.55f, 0.78f, 1.00f, 0.95f);
+            break;
+        case audio_extension::wav:
+            _background = ImVec4(0.55f, 0.90f, 0.68f, 0.95f);
+            break;
+        case audio_extension::flac:
+            _background = ImVec4(0.76f, 0.64f, 1.00f, 0.95f);
+            break;
+        case audio_extension::ogg:
+            _background = ImVec4(1.00f, 0.64f, 0.66f, 0.95f);
+            break;
+        case audio_extension::unknown:
+            break;
+        }
+        if (extension != audio_extension::unknown) {
+            _foreground = ImVec4(0.07f, 0.08f, 0.10f, 1.0f);
+        }
+
         constexpr ImVec2 _padding(7.0f, 1.0f);
         const ImVec2 _text_size = ImGui::CalcTextSize(_label.c_str());
         const ImVec2 _size(
@@ -94,11 +116,11 @@ namespace {
         _draw->AddRectFilled(
             _position,
             ImVec2(_position.x + _size.x, _position.y + _size.y),
-            ImGui::GetColorU32(ImGuiCol_HeaderActive),
+            ImGui::GetColorU32(_background),
             ImGui::GetStyle().FrameRounding);
         _draw->AddText(
             ImVec2(_position.x + _padding.x, _position.y + _padding.y),
-            ImGui::GetColorU32(ImGuiCol_Text),
+            ImGui::GetColorU32(_foreground),
             _label.c_str());
         ImGui::Dummy(_size);
     }
