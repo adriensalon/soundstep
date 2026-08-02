@@ -250,6 +250,38 @@ static void updateCursorImage(_GLFWwindow* window)
     }
 }
 
+// Updates the system cursor for a native window resize hit-test
+//
+static GLFWbool updateResizeCursor(int hitTest)
+{
+    LPCWSTR cursorName;
+
+    switch (hitTest)
+    {
+        case HTLEFT:
+        case HTRIGHT:
+            cursorName = IDC_SIZEWE;
+            break;
+        case HTTOP:
+        case HTBOTTOM:
+            cursorName = IDC_SIZENS;
+            break;
+        case HTTOPLEFT:
+        case HTBOTTOMRIGHT:
+            cursorName = IDC_SIZENWSE;
+            break;
+        case HTTOPRIGHT:
+        case HTBOTTOMLEFT:
+            cursorName = IDC_SIZENESW;
+            break;
+        default:
+            return GLFW_FALSE;
+    }
+
+    SetCursor(LoadCursorW(NULL, cursorName));
+    return GLFW_TRUE;
+}
+
 // Sets the cursor clip rect to the window content area
 //
 static void captureCursor(_GLFWwindow* window)
@@ -1175,7 +1207,7 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
             if (!window->decorated && window->resizable &&
                 !window->monitor && !IsZoomed(hWnd))
             {
-                int frameX, frameY, padding, minimumFrame;
+                int frameX, frameY, padding;
                 RECT rect;
                 const POINT cursor =
                 {
@@ -1189,19 +1221,17 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
                     frameX = GetSystemMetricsForDpi(SM_CXSIZEFRAME, dpi);
                     frameY = GetSystemMetricsForDpi(SM_CYSIZEFRAME, dpi);
                     padding = GetSystemMetricsForDpi(SM_CXPADDEDBORDER, dpi);
-                    minimumFrame = MulDiv(10, dpi, USER_DEFAULT_SCREEN_DPI);
                 }
                 else
                 {
                     frameX = GetSystemMetrics(SM_CXSIZEFRAME);
                     frameY = GetSystemMetrics(SM_CYSIZEFRAME);
                     padding = GetSystemMetrics(SM_CXPADDEDBORDER);
-                    minimumFrame = 10;
                 }
 
                 GetWindowRect(hWnd, &rect);
-                frameX = _glfw_max(frameX + padding, minimumFrame);
-                frameY = _glfw_max(frameY + padding, minimumFrame);
+                frameX += padding;
+                frameY += padding;
 
                 const GLFWbool left = cursor.x < rect.left + frameX;
                 const GLFWbool right = cursor.x >= rect.right - frameX;
@@ -1302,11 +1332,19 @@ static LRESULT CALLBACK windowProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM l
 
         case WM_SETCURSOR:
         {
-            if (LOWORD(lParam) == HTCLIENT)
+            const int hitTest = LOWORD(lParam);
+
+            if (hitTest == HTCLIENT)
             {
                 updateCursorImage(window);
                 return TRUE;
             }
+
+            // WM_NCCALCSIZE makes the resize frame part of the client area for
+            // undecorated windows, so DefWindowProc does not reliably update
+            // the resize cursor until a mouse button starts a frame action.
+            if (!window->decorated && updateResizeCursor(hitTest))
+                return TRUE;
 
             break;
         }
@@ -2449,8 +2487,27 @@ void _glfwDestroyCursorWin32(_GLFWcursor* cursor)
 
 void _glfwSetCursorWin32(_GLFWwindow* window, _GLFWcursor* cursor)
 {
-    if (cursorInContentArea(window))
-        updateCursorImage(window);
+    POINT pos;
+
+    if (!cursorInContentArea(window))
+        return;
+
+    // ImGui calls glfwSetCursor every frame.  For an undecorated window the
+    // native resize frame is also part of the client rect, so that refresh
+    // would immediately replace the resize cursor selected by WM_SETCURSOR.
+    if (!window->decorated && window->resizable &&
+        !window->monitor && !IsZoomed(window->win32.handle) &&
+        GetCursorPos(&pos))
+    {
+        const int hitTest = (int) SendMessageW(window->win32.handle,
+                                                WM_NCHITTEST,
+                                                0,
+                                                MAKELPARAM(pos.x, pos.y));
+        if (updateResizeCursor(hitTest))
+            return;
+    }
+
+    updateCursorImage(window);
 }
 
 void _glfwSetClipboardStringWin32(const char* string)

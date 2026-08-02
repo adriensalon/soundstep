@@ -812,35 +812,37 @@ namespace {
         ImGui::PopID();
     }
 
-    void _draw_library_edge_fades(ImVec2 minimum, ImVec2 maximum, bool fade_top, bool fade_bottom)
+    ImVec4 _chrome_background()
+    {
+        return ImVec4(0.025f, 0.025f, 0.025f, 0.82f);
+    }
+
+    void _draw_library_edge_fades(ImVec2 minimum, ImVec2 maximum)
     {
         constexpr float _fade_height = 28.0f;
-        const ImVec4 _background = ImGui::GetStyleColorVec4(ImGuiCol_WindowBg);
-        const ImU32 _opaque = ImGui::ColorConvertFloat4ToU32(_background);
+        const ImVec4 _background = _chrome_background();
+        const ImU32 _edge = ImGui::ColorConvertFloat4ToU32(_background);
         const ImU32 _transparent = ImGui::ColorConvertFloat4ToU32(
             ImVec4(_background.x, _background.y, _background.z, 0.0f));
         ImDrawList* _draw = ImGui::GetWindowDrawList();
 
-        if (fade_top) {
-            const float _end_y = (std::min)(maximum.y, minimum.y + _fade_height);
-            _draw->AddRectFilledMultiColor(
-                minimum,
-                ImVec2(maximum.x, _end_y),
-                _opaque,
-                _opaque,
-                _transparent,
-                _transparent);
-        }
-        if (fade_bottom) {
-            const float _start_y = (std::max)(minimum.y, maximum.y - _fade_height);
-            _draw->AddRectFilledMultiColor(
-                ImVec2(minimum.x, _start_y),
-                maximum,
-                _transparent,
-                _transparent,
-                _opaque,
-                _opaque);
-        }
+        const float _top_end_y = (std::min)(maximum.y, minimum.y + _fade_height);
+        _draw->AddRectFilledMultiColor(
+            minimum,
+            ImVec2(maximum.x, _top_end_y),
+            _edge,
+            _edge,
+            _transparent,
+            _transparent);
+
+        const float _bottom_start_y = (std::max)(minimum.y, maximum.y - _fade_height);
+        _draw->AddRectFilledMultiColor(
+            ImVec2(minimum.x, _bottom_start_y),
+            maximum,
+            _transparent,
+            _transparent,
+            _edge,
+            _edge);
     }
 
     void _draw_track_cards(context& ctx, const std::vector<peer_record>& peers, const std::unordered_set<std::string>& available_hashes)
@@ -884,9 +886,7 @@ namespace {
                 _draw_track_card(ctx, _view._tracks[_track_index], peers);
             }
         }
-        const bool _fade_top = ImGui::GetScrollY() > 0.5f;
-        const bool _fade_bottom = ImGui::GetScrollY() < ImGui::GetScrollMaxY() - 0.5f;
-        _draw_library_edge_fades(_list_min, _list_max, _fade_top, _fade_bottom);
+        _draw_library_edge_fades(_list_min, _list_max);
         ImGui::EndChild();
     }
 
@@ -963,9 +963,21 @@ void draw_library(context& ctx)
     _refresh_tracks(ctx, _instance, _peers);
     _update_scan_message(ctx);
 
+    // Keep the scrolling cards over the animated background while giving the
+    // controls above them a darker, quieter surface.  Drawing the surface on a
+    // lower channel lets us determine its exact bottom after laying out the
+    // responsive toolbar.
+    ImDrawList* _draw = ImGui::GetWindowDrawList();
+    const ImVec2 _chrome_min = ImGui::GetWindowPos();
+    const float _chrome_right = _chrome_min.x + ImGui::GetWindowSize().x;
+    _draw->ChannelsSplit(2);
+    _draw->ChannelsSetCurrent(1);
+
     const float _toolbar_inset = _library_list_horizontal_padding + _track_card_padding;
     const ImVec2 _toolbar_position = ImGui::GetCursorPos();
-    ImGui::SetCursorPos(ImVec2(_toolbar_position.x + _toolbar_inset, _toolbar_position.y + _toolbar_inset));
+    ImGui::SetCursorPos(ImVec2(
+        _toolbar_position.x + _toolbar_inset,
+        _toolbar_position.y + _toolbar_inset + ImGui::GetStyle().WindowPadding.y));
     const float _toolbar_start_x = ImGui::GetCursorPosX();
     const float _toolbar_width = ImGui::GetContentRegionAvail().x;
     const float _toolbar_right_x = _toolbar_start_x + _toolbar_width
@@ -1076,13 +1088,21 @@ void draw_library(context& ctx)
                 4.5f,
                 animation_with_alpha(_message_color, _message_alpha));
         }
-        ImGui::GetWindowDrawList()->AddText(
+        _draw->AddText(
             ImVec2(
                 _message_position.x + _activity_width,
                 _message_position.y + (1.0f - _message_alpha) * 5.0f),
             animation_with_alpha(_message_color, _message_alpha),
             _message_visual._text.c_str());
     }
+
+    const float _cards_top = ImGui::GetCursorScreenPos().y;
+    _draw->ChannelsSetCurrent(0);
+    _draw->AddRectFilled(
+        _chrome_min,
+        ImVec2(_chrome_right, _cards_top),
+        ImGui::GetColorU32(_chrome_background()));
+    _draw->ChannelsMerge();
 
     _draw_track_cards(ctx, _peers, _available);
 }

@@ -17,11 +17,16 @@
 namespace soundstep {
 namespace {
 
+    ImVec4 _chrome_background()
+    {
+        return ImVec4(0.025f, 0.025f, 0.025f, 0.82f);
+    }
+
 #ifndef __ANDROID__
     constexpr float _title_bar_height = 44.0f;
     constexpr float _window_button_width = 46.0f;
     constexpr float _title_horizontal_inset = 29.0f;
-    constexpr float _title_vertical_inset = 27.0f;
+    constexpr float _title_vertical_inset = 20.0f;
 
     enum struct _window_button_kind {
         minimize,
@@ -133,7 +138,7 @@ namespace {
         _draw->AddRectFilled(
             _position,
             ImVec2(_position.x + _width, _position.y + _title_bar_height),
-            ImGui::GetColorU32(ImVec4(0.075f, 0.075f, 0.075f, 0.88f)));
+            ImGui::GetColorU32(_chrome_background()));
 
         ImGui::SetCursorScreenPos(_position);
         ImGui::InvisibleButton("##WindowDrag", ImVec2(_drag_width, _title_bar_height));
@@ -190,6 +195,10 @@ namespace {
 
         ImGui::SetCursorScreenPos(_position);
         ImGui::Dummy(ImVec2(_width, _title_bar_height));
+        // Dummy advances by ItemSpacing; place the following header directly
+        // against the title bar instead of leaving a strip of bare background.
+        ImGui::SetCursorScreenPos(
+            ImVec2(_position.x, _position.y + _title_bar_height));
     }
 #endif
 
@@ -221,12 +230,28 @@ void draw_app(context& ctx, GLFWwindow* window)
         const float _library_player_gap = ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y;
         const float _content_start_y = ImGui::GetCursorPosY();
         const float _content_height = (std::max)(0.0f, ImGui::GetContentRegionAvail().y - _player_height - _library_player_gap);
-        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, _window_padding);
+        // The library owns its vertical spacing.  A child-window bottom
+        // padding here would leave a bare strip between its fade and player.
+        ImGui::PushStyleVar(
+            ImGuiStyleVar_WindowPadding,
+            ImVec2(_window_padding.x, 0.0f));
         if (ImGui::BeginChild("##SoundstepContent", ImVec2(0.0f, _content_height), false, ImGuiWindowFlags_AlwaysUseWindowPadding)) {
             draw_library(ctx);
         }
         ImGui::EndChild();
         ImGui::PopStyleVar();
+
+        const ImVec2 _lower_chrome_min(
+            _viewport->WorkPos.x,
+            _viewport->WorkPos.y + _content_start_y + _content_height);
+        const ImVec2 _lower_chrome_max(
+            _viewport->WorkPos.x + _viewport->WorkSize.x,
+            _viewport->WorkPos.y + _viewport->WorkSize.y);
+        ImGui::GetWindowDrawList()->AddRectFilled(
+            _lower_chrome_min,
+            _lower_chrome_max,
+            ImGui::GetColorU32(_chrome_background()));
+
         ImGui::SetCursorPosY(_content_start_y + _content_height + _library_player_gap);
         if (ImGui::BeginChild("##SoundstepPlayer", ImVec2(0.0f, 0.0f), false)) {
             draw_player(ctx);
