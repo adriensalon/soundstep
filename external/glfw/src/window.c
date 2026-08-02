@@ -813,6 +813,31 @@ GLFWAPI void glfwMaximizeWindow(GLFWwindow* handle)
     _glfw.platform.maximizeWindow(window);
 }
 
+GLFWAPI void glfwStartWindowMove(GLFWwindow* handle)
+{
+    _GLFWwindow* window = (_GLFWwindow*) handle;
+    assert(window != NULL);
+
+    _GLFW_REQUIRE_INIT();
+
+    if (window->monitor)
+        return;
+
+    if (!_glfw.platform.startWindowMove)
+    {
+        _glfwInputError(GLFW_FEATURE_UNAVAILABLE,
+                        "Window moving is not supported on this platform");
+        return;
+    }
+
+    // The native move loop may consume the release that ends the drag, so
+    // release GLFW's client-side state before handing control to the system.
+    if (window->mouseButtons[GLFW_MOUSE_BUTTON_LEFT] == GLFW_PRESS)
+        _glfwInputMouseClick(window, GLFW_MOUSE_BUTTON_LEFT, GLFW_RELEASE, 0);
+
+    _glfw.platform.startWindowMove(window);
+}
+
 GLFWAPI void glfwShowWindow(GLFWwindow* handle)
 {
     _GLFWwindow* window = (_GLFWwindow*) handle;
@@ -1169,4 +1194,3 @@ GLFWAPI void glfwPostEmptyEvent(void)
     _GLFW_REQUIRE_INIT();
     _glfw.platform.postEmptyEvent();
 }
-

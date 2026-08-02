@@ -11,6 +11,7 @@
 #include <core/context.hpp>
 #include <widget/animation.hpp>
 #include <widget/friends.hpp>
+#include <widget/tooltip.hpp>
 #include <widget/icons.hpp>
 
 namespace soundstep {
@@ -136,7 +137,7 @@ namespace {
                 _dialog._selected_id = _record.id;
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("%s", _record.id.c_str());
+                draw_tooltip(_record.id.c_str());
             }
 
             ImGui::TableSetColumnIndex(1);
@@ -157,7 +158,7 @@ namespace {
                 });
             }
             if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Show this friend's tracks in the unified library");
+                draw_tooltip("Show this friend's tracks in the unified library");
             }
 
             ImGui::TableSetColumnIndex(3);

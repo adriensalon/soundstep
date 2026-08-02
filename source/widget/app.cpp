@@ -1,17 +1,197 @@
 #include <algorithm>
 
+#include <GLFW/glfw3.h>
 #include <imgui.h>
 
 #include <core/context.hpp>
+#include <widget/animation.hpp>
 #include <widget/app.hpp>
 #include <widget/friends.hpp>
 #include <widget/library.hpp>
 #include <widget/player.hpp>
 #include <widget/settings.hpp>
+#include <widget/tooltip.hpp>
 
 namespace soundstep {
+namespace {
 
-void draw_app(context& ctx)
+    constexpr float _title_bar_height = 44.0f;
+    constexpr float _window_button_width = 46.0f;
+    constexpr float _title_horizontal_inset = 29.0f;
+    constexpr float _title_vertical_inset = 27.0f;
+
+    enum struct _window_button_kind {
+        minimize,
+        maximize,
+        restore,
+        close
+    };
+
+    bool _draw_window_button(
+        const char* id,
+        const char* tooltip,
+        _window_button_kind kind,
+        ImVec2 position)
+    {
+        ImGui::SetCursorScreenPos(position);
+        ImGui::InvisibleButton(id, ImVec2(_window_button_width, _title_bar_height));
+        const bool _clicked = ImGui::IsItemClicked(ImGuiMouseButton_Left);
+        const bool _hovered = ImGui::IsItemHovered();
+        const bool _active = ImGui::IsItemActive();
+        const ImGuiID _owner = ImGui::GetItemID();
+        const float _hover = animation_tween(
+            _owner,
+            0x81001u,
+            _hovered ? 1.0f : 0.0f,
+            animation_quick);
+
+        ImVec4 _background = kind == _window_button_kind::close
+            ? ImVec4(0.86f, 0.16f, 0.18f, 1.0f)
+            : ImGui::GetStyleColorVec4(ImGuiCol_ButtonHovered);
+        if (_active) {
+            _background.x *= 0.78f;
+            _background.y *= 0.78f;
+            _background.z *= 0.78f;
+        }
+
+        ImDrawList* _draw = ImGui::GetWindowDrawList();
+        _draw->AddRectFilled(
+            position,
+            ImVec2(position.x + _window_button_width, position.y + _title_bar_height),
+            animation_with_alpha(_background, _hover));
+
+        const ImU32 _glyph_color = ImGui::GetColorU32(ImGuiCol_Text);
+        const ImVec2 _center(
+            position.x + _window_button_width * 0.5f,
+            position.y + _title_bar_height * 0.5f);
+        constexpr float _half_size = 5.0f;
+        constexpr float _stroke = 1.25f;
+        switch (kind) {
+        case _window_button_kind::minimize:
+            _draw->AddLine(
+                ImVec2(_center.x - _half_size, _center.y + 3.0f),
+                ImVec2(_center.x + _half_size, _center.y + 3.0f),
+                _glyph_color,
+                _stroke);
+            break;
+        case _window_button_kind::maximize:
+            _draw->AddRect(
+                ImVec2(_center.x - _half_size, _center.y - _half_size),
+                ImVec2(_center.x + _half_size, _center.y + _half_size),
+                _glyph_color,
+                0.0f,
+                0,
+                _stroke);
+            break;
+        case _window_button_kind::restore:
+            _draw->AddRect(
+                ImVec2(_center.x - 3.0f, _center.y - _half_size),
+                ImVec2(_center.x + _half_size, _center.y + 3.0f),
+                _glyph_color,
+                0.0f,
+                0,
+                _stroke);
+            _draw->AddRect(
+                ImVec2(_center.x - _half_size, _center.y - 3.0f),
+                ImVec2(_center.x + 3.0f, _center.y + _half_size),
+                _glyph_color,
+                0.0f,
+                0,
+                _stroke);
+            break;
+        case _window_button_kind::close:
+            _draw->AddLine(
+                ImVec2(_center.x - _half_size, _center.y - _half_size),
+                ImVec2(_center.x + _half_size, _center.y + _half_size),
+                _glyph_color,
+                _stroke);
+            _draw->AddLine(
+                ImVec2(_center.x + _half_size, _center.y - _half_size),
+                ImVec2(_center.x - _half_size, _center.y + _half_size),
+                _glyph_color,
+                _stroke);
+            break;
+        }
+
+        if (_hovered) {
+            draw_tooltip(tooltip);
+        }
+        return _clicked;
+    }
+
+    void _draw_title_bar(const context& ctx, GLFWwindow* window)
+    {
+        const ImVec2 _position = ImGui::GetCursorScreenPos();
+        const float _width = ImGui::GetContentRegionAvail().x;
+        const float _buttons_width = _window_button_width * 3.0f;
+        const float _drag_width = (std::max)(0.0f, _width - _buttons_width);
+        ImDrawList* _draw = ImGui::GetWindowDrawList();
+
+        _draw->AddRectFilled(
+            _position,
+            ImVec2(_position.x + _width, _position.y + _title_bar_height),
+            ImGui::GetColorU32(ImVec4(0.075f, 0.075f, 0.075f, 0.88f)));
+
+        ImGui::SetCursorScreenPos(_position);
+        ImGui::InvisibleButton("##WindowDrag", ImVec2(_drag_width, _title_bar_height));
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left)) {
+            if (glfwGetWindowAttrib(window, GLFW_MAXIMIZED) == GLFW_TRUE) {
+                glfwRestoreWindow(window);
+            } else {
+                glfwMaximizeWindow(window);
+            }
+        } else if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+            glfwStartWindowMove(window);
+        }
+
+        const char* _title = "SOUNDSTEP";
+        ImFont* _title_font = ctx.fonts.brand != nullptr ? ctx.fonts.brand : ImGui::GetFont();
+        _draw->AddText(
+            _title_font,
+            _title_font->FontSize,
+            ImVec2(
+                _position.x + _title_horizontal_inset,
+                _position.y + _title_vertical_inset),
+            ImGui::GetColorU32(ImGuiCol_Text),
+            _title);
+
+        const float _buttons_x = _position.x + _width - _buttons_width;
+        if (_draw_window_button(
+                "##WindowMinimize",
+                "Minimize",
+                _window_button_kind::minimize,
+                ImVec2(_buttons_x, _position.y))) {
+            glfwIconifyWindow(window);
+        }
+
+        const bool _maximized = glfwGetWindowAttrib(window, GLFW_MAXIMIZED) == GLFW_TRUE;
+        if (_draw_window_button(
+                "##WindowMaximize",
+                _maximized ? "Restore" : "Maximize",
+                _maximized ? _window_button_kind::restore : _window_button_kind::maximize,
+                ImVec2(_buttons_x + _window_button_width, _position.y))) {
+            if (_maximized) {
+                glfwRestoreWindow(window);
+            } else {
+                glfwMaximizeWindow(window);
+            }
+        }
+
+        if (_draw_window_button(
+                "##WindowClose",
+                "Close",
+                _window_button_kind::close,
+                ImVec2(_buttons_x + _window_button_width * 2.0f, _position.y))) {
+            glfwSetWindowShouldClose(window, GLFW_TRUE);
+        }
+
+        ImGui::SetCursorScreenPos(_position);
+        ImGui::Dummy(ImVec2(_width, _title_bar_height));
+    }
+
+}
+
+void draw_app(context& ctx, GLFWwindow* window)
 {
     const ImGuiViewport* _viewport = ImGui::GetMainViewport();
     const ImVec2 _window_padding = ImGui::GetStyle().WindowPadding;
@@ -28,6 +208,7 @@ void draw_app(context& ctx)
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(7.0f, 6.0f));
     if (ImGui::Begin("##SoundstepMain", nullptr, _window_flags)) {
+        _draw_title_bar(ctx, window);
         constexpr float _player_height = 112.0f;
         const float _library_player_gap = ImGui::GetTextLineHeight() + ImGui::GetStyle().ItemSpacing.y;
         const float _content_start_y = ImGui::GetCursorPosY();

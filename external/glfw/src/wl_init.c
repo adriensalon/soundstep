@@ -486,6 +486,7 @@ GLFWbool _glfwConnectWayland(int platformID, _GLFWplatform* platform)
         .hideWindow = _glfwHideWindowWayland,
         .requestWindowAttention = _glfwRequestWindowAttentionWayland,
         .focusWindow = _glfwFocusWindowWayland,
+        .startWindowMove = _glfwStartWindowMoveWayland,
         .setWindowMonitor = _glfwSetWindowMonitorWayland,
         .windowFocused = _glfwWindowFocusedWayland,
         .windowIconified = _glfwWindowIconifiedWayland,
@@ -1000,4 +1001,3 @@ void _glfwTerminateWayland(void)
 }
 
 #endif // _GLFW_WAYLAND
-

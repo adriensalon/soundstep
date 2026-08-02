@@ -632,6 +632,7 @@ void _glfwShowWindowWayland(_GLFWwindow* window);
 void _glfwHideWindowWayland(_GLFWwindow* window);
 void _glfwRequestWindowAttentionWayland(_GLFWwindow* window);
 void _glfwFocusWindowWayland(_GLFWwindow* window);
+void _glfwStartWindowMoveWayland(_GLFWwindow* window);
 void _glfwSetWindowMonitorWayland(_GLFWwindow* window, _GLFWmonitor* monitor, int xpos, int ypos, int width, int height, int refreshRate);
 GLFWbool _glfwWindowFocusedWayland(_GLFWwindow* window);
 GLFWbool _glfwWindowIconifiedWayland(_GLFWwindow* window);
@@ -688,4 +689,3 @@ void _glfwUpdateBufferScaleFromOutputsWayland(_GLFWwindow* window);
 
 void _glfwAddSeatListenerWayland(struct wl_seat* seat);
 void _glfwAddDataDeviceListenerWayland(struct wl_data_device* device);
-

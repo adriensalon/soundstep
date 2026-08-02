@@ -1799,6 +1799,17 @@ void _glfwMaximizeWindowWin32(_GLFWwindow* window)
         maximizeWindowManually(window);
 }
 
+void _glfwStartWindowMoveWin32(_GLFWwindow* window)
+{
+    POINT position;
+    GetCursorPos(&position);
+    ReleaseCapture();
+    SendMessageW(window->win32.handle,
+                 WM_NCLBUTTONDOWN,
+                 HTCAPTION,
+                 MAKELPARAM(position.x, position.y));
+}
+
 void _glfwShowWindowWin32(_GLFWwindow* window)
 {
     int showCommand = SW_SHOWNA;
@@ -2590,4 +2601,3 @@ GLFWAPI HWND glfwGetWin32Window(GLFWwindow* handle)
 }
 
 #endif // _GLFW_WIN32
-

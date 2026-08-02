@@ -2420,6 +2420,16 @@ void _glfwMaximizeWindowWayland(_GLFWwindow* window)
         window->wl.maximized = GLFW_TRUE;
 }
 
+void _glfwStartWindowMoveWayland(_GLFWwindow* window)
+{
+    struct xdg_toplevel* toplevel = window->wl.xdg.toplevel;
+    if (!toplevel && window->wl.libdecor.frame)
+        toplevel = libdecor_frame_get_xdg_toplevel(window->wl.libdecor.frame);
+
+    if (toplevel && _glfw.wl.seat && _glfw.wl.serial)
+        xdg_toplevel_move(toplevel, _glfw.wl.seat, _glfw.wl.serial);
+}
+
 void _glfwShowWindowWayland(_GLFWwindow* window)
 {
     if (!window->wl.libdecor.frame && !window->wl.xdg.toplevel)
@@ -3305,4 +3315,3 @@ GLFWAPI struct wl_surface* glfwGetWaylandWindow(GLFWwindow* handle)
 }
 
 #endif // _GLFW_WAYLAND
-

@@ -3875,6 +3875,23 @@ GLFWAPI void glfwRestoreWindow(GLFWwindow* window);
  */
 GLFWAPI void glfwMaximizeWindow(GLFWwindow* window);
 
+/*! @brief Starts an interactive move of the specified window.
+ *
+ *  This function asks the platform window manager to begin moving the window
+ *  in response to the current left mouse button press.  It is intended for
+ *  applications that draw their own window decorations.
+ *
+ *  @param[in] window The window to move.
+ *
+ *  @errors Possible errors include @ref GLFW_NOT_INITIALIZED and @ref
+ *  GLFW_FEATURE_UNAVAILABLE.
+ *
+ *  @thread_safety This function must only be called from the main thread.
+ *
+ *  @ingroup window
+ */
+GLFWAPI void glfwStartWindowMove(GLFWwindow* window);
+
 /*! @brief Makes the specified window visible.
  *
  *  This function makes the specified window visible if it was previously
@@ -6544,4 +6561,3 @@ GLFWAPI VkResult glfwCreateWindowSurface(VkInstance instance, GLFWwindow* window
 #endif
 
 #endif /* _glfw3_h_ */
-

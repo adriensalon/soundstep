@@ -23,6 +23,7 @@ struct widget_error : std::runtime_error {
 
 struct widget_fonts {
     ImFont* ui { nullptr };
+    ImFont* brand { nullptr };
     ImFont* track_title { nullptr };
     ImFont* subtitle { nullptr };
 };

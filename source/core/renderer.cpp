@@ -256,6 +256,7 @@ void main()
         _colors[ImGuiCol_TableBorderLight] = ImVec4(0.23f, 0.23f, 0.23f, 1.00f);
         _colors[ImGuiCol_TextSelectedBg] = ImVec4(0.45f, 0.45f, 0.45f, 0.35f);
         _colors[ImGuiCol_NavHighlight] = ImVec4(0.60f, 0.60f, 0.60f, 1.00f);
+        _colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.86f);
     }
 
 }
@@ -456,8 +457,16 @@ ImFont* renderer::add_font(std::string_view resource_path, float font_size)
     return _font;
 }
 
-void renderer::merge_font(std::string_view resource_path, float font_size, const ImWchar* glyph_ranges)
+void renderer::merge_font(
+    std::string_view resource_path,
+    float font_size,
+    ImFont* destination,
+    const ImWchar* glyph_ranges)
 {
+    if (destination == nullptr) {
+        throw renderer_error("Cannot merge an embedded font into a null destination");
+    }
+
     const std::string _path(resource_path);
     const cmrc::embedded_filesystem _resources = cmrc::soundstep_resource::get_filesystem();
     if (!_resources.is_file(_path)) {
@@ -473,6 +482,7 @@ void renderer::merge_font(std::string_view resource_path, float font_size, const
     ImFontConfig _config;
     _config.FontDataOwnedByAtlas = false;
     _config.MergeMode = true;
+    _config.DstFont = destination;
     _config.PixelSnapH = true;
     _config.GlyphOffset.y = 3.0f;
     ImFont* _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(

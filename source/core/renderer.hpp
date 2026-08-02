@@ -33,7 +33,11 @@ struct renderer {
     renderer& operator=(renderer&& other) = delete;
 
     [[nodiscard]] ImFont* add_font(std::string_view resource_path, float font_size);
-    void merge_font(std::string_view resource_path, float font_size, const ImWchar* glyph_ranges);
+    void merge_font(
+        std::string_view resource_path,
+        float font_size,
+        ImFont* destination,
+        const ImWchar* glyph_ranges);
     void begin_frame();
     void render(const playback_status& playback);
     [[nodiscard]] static renderer_texture create_rgba_texture(const unsigned char* pixels, int width, int height);

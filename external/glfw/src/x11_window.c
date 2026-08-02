@@ -2425,6 +2425,41 @@ void _glfwMaximizeWindowX11(_GLFWwindow* window)
     XFlush(_glfw.x11.display);
 }
 
+void _glfwStartWindowMoveX11(_GLFWwindow* window)
+{
+    int rootX = 0;
+    int rootY = 0;
+    int windowX;
+    int windowY;
+    unsigned int mask;
+    Window root = _glfw.x11.root;
+    Window child;
+
+    XQueryPointer(_glfw.x11.display, window->x11.handle,
+                  &root, &child,
+                  &rootX, &rootY,
+                  &windowX, &windowY,
+                  &mask);
+
+    XEvent event = { ClientMessage };
+    event.xclient.window = window->x11.handle;
+    event.xclient.message_type = XInternAtom(_glfw.x11.display,
+                                             "_NET_WM_MOVERESIZE",
+                                             False);
+    event.xclient.format = 32;
+    event.xclient.data.l[0] = rootX;
+    event.xclient.data.l[1] = rootY;
+    event.xclient.data.l[2] = 8; // _NET_WM_MOVERESIZE_MOVE
+    event.xclient.data.l[3] = Button1;
+    event.xclient.data.l[4] = 1; // Normal application source indication
+
+    XUngrabPointer(_glfw.x11.display, CurrentTime);
+    XSendEvent(_glfw.x11.display, _glfw.x11.root, False,
+               SubstructureNotifyMask | SubstructureRedirectMask,
+               &event);
+    XFlush(_glfw.x11.display);
+}
+
 void _glfwShowWindowX11(_GLFWwindow* window)
 {
     if (_glfwWindowVisibleX11(window))
@@ -3354,4 +3389,3 @@ GLFWAPI const char* glfwGetX11SelectionString(void)
 }
 
 #endif // _GLFW_X11
-

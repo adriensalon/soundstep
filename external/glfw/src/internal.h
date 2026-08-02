@@ -724,6 +724,7 @@ struct _GLFWplatform
     void (*hideWindow)(_GLFWwindow*);
     void (*requestWindowAttention)(_GLFWwindow*);
     void (*focusWindow)(_GLFWwindow*);
+    void (*startWindowMove)(_GLFWwindow*);
     void (*setWindowMonitor)(_GLFWwindow*,_GLFWmonitor*,int,int,int,int,int);
     GLFWbool (*windowFocused)(_GLFWwindow*);
     GLFWbool (*windowIconified)(_GLFWwindow*);
@@ -1006,4 +1007,3 @@ int _glfw_max(int a, int b);
 void* _glfw_calloc(size_t count, size_t size);
 void* _glfw_realloc(void* pointer, size_t size);
 void _glfw_free(void* pointer);
-

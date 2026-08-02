@@ -14,6 +14,7 @@
 #include <widget/icons.hpp>
 #include <widget/library.hpp>
 #include <widget/player.hpp>
+#include <widget/tooltip.hpp>
 
 namespace soundstep {
 namespace {
@@ -482,7 +483,7 @@ void draw_player(context& ctx)
         play_previous_track(ctx);
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip("Previous");
+        draw_tooltip("Previous");
     }
     ImGui::SameLine();
     if (_draw_primary_button(
@@ -507,7 +508,7 @@ void draw_player(context& ctx)
         play_next_track(ctx);
     }
     if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled)) {
-        ImGui::SetTooltip("Next");
+        draw_tooltip("Next");
     }
     ImGui::PopStyleVar();
 

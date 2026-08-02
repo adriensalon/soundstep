@@ -1223,6 +1223,7 @@ GLFWbool _glfwConnectX11(int platformID, _GLFWplatform* platform)
         .hideWindow = _glfwHideWindowX11,
         .requestWindowAttention = _glfwRequestWindowAttentionX11,
         .focusWindow = _glfwFocusWindowX11,
+        .startWindowMove = _glfwStartWindowMoveX11,
         .setWindowMonitor = _glfwSetWindowMonitorX11,
         .windowFocused = _glfwWindowFocusedX11,
         .windowIconified = _glfwWindowIconifiedX11,
@@ -1653,4 +1654,3 @@ void _glfwTerminateX11(void)
 }
 
 #endif // _GLFW_X11
-
