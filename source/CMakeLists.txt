@@ -43,6 +43,8 @@ if(ANDROID)
         "${_native_app_glue_dir}/android_native_app_glue.c")
     target_include_directories(soundstep_native_app_glue PUBLIC "${_native_app_glue_dir}")
     add_library(soundstep SHARED ${soundstep_sources})
+elseif(WIN32)
+    add_executable(soundstep WIN32 ${soundstep_sources})
 else()
     add_executable(soundstep ${soundstep_sources})
 endif()
@@ -50,6 +52,9 @@ endif()
 set_target_properties(soundstep PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON)
+if(NOT ANDROID)
+    set_target_properties(soundstep PROPERTIES OUTPUT_NAME "SoundStep")
+endif()
 if(SOUNDSTEP_OUTPUT_DIR)
     set_target_properties(soundstep PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${SOUNDSTEP_OUTPUT_DIR}"

@@ -13,8 +13,7 @@ extern "C" void android_main(android_app* app)
 {
     app_dummy();
     try {
-        const std::filesystem::path _data = std::filesystem::u8path(
-            app->activity->internalDataPath);
+        const std::filesystem::path _data = std::filesystem::u8path(app->activity->internalDataPath);
         soundstep::storage _store(_data / "soundstep.db", _data / "assets");
         const soundstep::configuration _configuration = _store.config();
         soundstep::library_scanner _scanner(_store);
@@ -33,25 +32,24 @@ extern "C" void android_main(android_app* app)
         soundstep::window _window(_ctx, app);
         _window.run();
     } catch (const std::exception& exception) {
-        __android_log_print(
-            ANDROID_LOG_ERROR,
-            "soundstep",
-            "Soundstep failed: %s",
-            exception.what());
+        __android_log_print(ANDROID_LOG_ERROR, "soundstep", "Soundstep failed: %s", exception.what());
         ANativeActivity_finish(app->activity);
     } catch (...) {
-        __android_log_write(
-            ANDROID_LOG_ERROR,
-            "soundstep",
-            "Soundstep failed with an unknown error");
+        __android_log_write(ANDROID_LOG_ERROR, "soundstep", "Soundstep failed with an unknown error");
         ANativeActivity_finish(app->activity);
     }
 }
+
 #else
+
 #include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <iostream>
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #include <core/config.hpp>
 #include <core/context.hpp>
@@ -80,7 +78,9 @@ std::filesystem::path _data_directory()
 
 }
 
-int main()
+namespace {
+
+int run()
 {
     try {
         const std::filesystem::path _data = _data_directory();
@@ -101,8 +101,26 @@ int main()
         _window.run();
         return 0;
     } catch (const std::exception& _exception) {
+#ifdef _WIN32
+        MessageBoxA(nullptr, _exception.what(), "Soundstep failed", MB_OK | MB_ICONERROR);
+#else
         std::cerr << "Soundstep failed: " << _exception.what() << '\n';
+#endif
         return 1;
     }
 }
+
+}
+
+#ifdef _WIN32
+int WINAPI WinMain(HINSTANCE, HINSTANCE, LPSTR, int)
+{
+    return run();
+}
+#else
+int main()
+{
+    return run();
+}
+#endif
 #endif

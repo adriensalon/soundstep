@@ -6,9 +6,11 @@
 
 #include <backends/imgui_impl_android.h>
 
+#include <cstdint>
 #include <stdexcept>
 
 #include <core/context.hpp>
+#include <core/renderer.hpp>
 #include <core/window.hpp>
 #include <widget/app.hpp>
 #include <widget/settings.hpp>
@@ -46,29 +48,43 @@ namespace {
 
 }
 
-struct window::android_state {
-    EGLDisplay display { EGL_NO_DISPLAY };
-    EGLSurface surface { EGL_NO_SURFACE };
-    EGLContext context { EGL_NO_CONTEXT };
-    bool settings_opened { false };
+struct window::implementation {
+    implementation(context& ctx, android_app* app);
+    ~implementation();
+
+    void initialize_native_window();
+    void destroy_native_window() noexcept;
+    void handle_app_command(std::int32_t command);
+    void run();
+
+    struct state {
+        EGLDisplay display { EGL_NO_DISPLAY };
+        EGLSurface surface { EGL_NO_SURFACE };
+        EGLContext context { EGL_NO_CONTEXT };
+        bool settings_opened { false };
+    };
+
+    context& _ctx;
+    android_app* _app { nullptr };
+    state _state;
+    std::unique_ptr<renderer> _renderer { nullptr };
 };
 
-window::window(context& ctx, android_app* app)
+window::implementation::implementation(context& ctx, android_app* app)
     : _ctx(ctx)
     , _app(app)
-    , _state(std::make_unique<android_state>())
 {
     if (_app == nullptr) {
         throw window_error("Android application state is null");
     }
 }
 
-window::~window()
+window::implementation::~implementation()
 {
-    _destroy_native_window();
+    destroy_native_window();
 }
 
-void window::_initialize_native_window()
+void window::implementation::initialize_native_window()
 {
     if (_app->window == nullptr || _renderer) {
         return;
@@ -90,44 +106,44 @@ void window::_initialize_native_window()
         EGL_NONE
     };
 
-    _state->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    if (_state->display == EGL_NO_DISPLAY || eglInitialize(_state->display, nullptr, nullptr) != EGL_TRUE || eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
-        _destroy_native_window();
+    _state.display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
+    if (_state.display == EGL_NO_DISPLAY || eglInitialize(_state.display, nullptr, nullptr) != EGL_TRUE || eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
+        destroy_native_window();
         throw window_error("Failed to initialize Android EGL");
     }
 
     EGLConfig _config = nullptr;
     EGLint _config_count = 0;
-    if (eglChooseConfig(_state->display, _config_attributes, &_config, 1, &_config_count) != EGL_TRUE || _config_count == 0) {
-        _destroy_native_window();
+    if (eglChooseConfig(_state.display, _config_attributes, &_config, 1, &_config_count) != EGL_TRUE || _config_count == 0) {
+        destroy_native_window();
         throw window_error("Android EGL did not provide an OpenGL ES 3 configuration");
     }
 
     EGLint _format = 0;
-    eglGetConfigAttrib(_state->display, _config, EGL_NATIVE_VISUAL_ID, &_format);
+    eglGetConfigAttrib(_state.display, _config, EGL_NATIVE_VISUAL_ID, &_format);
     ANativeWindow_setBuffersGeometry(_app->window, 0, 0, _format);
-    _state->surface = eglCreateWindowSurface(_state->display, _config, _app->window, nullptr);
-    _state->context = eglCreateContext(_state->display, _config, EGL_NO_CONTEXT, _context_attributes);
-    if (_state->surface == EGL_NO_SURFACE || _state->context == EGL_NO_CONTEXT || eglMakeCurrent(_state->display, _state->surface, _state->surface, _state->context) != EGL_TRUE) {
-        _destroy_native_window();
+    _state.surface = eglCreateWindowSurface(_state.display, _config, _app->window, nullptr);
+    _state.context = eglCreateContext(_state.display, _config, EGL_NO_CONTEXT, _context_attributes);
+    if (_state.surface == EGL_NO_SURFACE || _state.context == EGL_NO_CONTEXT || eglMakeCurrent(_state.display, _state.surface, _state.surface, _state.context) != EGL_TRUE) {
+        destroy_native_window();
         throw window_error("Failed to create the Android EGL surface or context");
     }
-    eglSwapInterval(_state->display, 1);
+    eglSwapInterval(_state.display, 1);
 
     try {
         _renderer = std::make_unique<renderer>(_app->window);
         _load_fonts(_ctx, *_renderer);
-        if (!_state->settings_opened && _ctx.store.config().library_path.empty()) {
+        if (!_state.settings_opened && _ctx.store.config().library_path.empty()) {
             open_settings(_ctx);
-            _state->settings_opened = true;
+            _state.settings_opened = true;
         }
     } catch (...) {
-        _destroy_native_window();
+        destroy_native_window();
         throw;
     }
 }
 
-void window::_destroy_native_window() noexcept
+void window::implementation::destroy_native_window() noexcept
 {
     if (_renderer) {
         _ctx.covers.release_textures();
@@ -135,55 +151,53 @@ void window::_destroy_native_window() noexcept
     }
     _ctx.fonts = { };
 
-    if (_state && _state->display != EGL_NO_DISPLAY) {
-        eglMakeCurrent(_state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
-        if (_state->context != EGL_NO_CONTEXT) {
-            eglDestroyContext(_state->display, _state->context);
+    if (_state.display != EGL_NO_DISPLAY) {
+        eglMakeCurrent(_state.display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        if (_state.context != EGL_NO_CONTEXT) {
+            eglDestroyContext(_state.display, _state.context);
         }
-        if (_state->surface != EGL_NO_SURFACE) {
-            eglDestroySurface(_state->display, _state->surface);
+        if (_state.surface != EGL_NO_SURFACE) {
+            eglDestroySurface(_state.display, _state.surface);
         }
-        eglTerminate(_state->display);
+        eglTerminate(_state.display);
     }
-    if (_state) {
-        _state->display = EGL_NO_DISPLAY;
-        _state->surface = EGL_NO_SURFACE;
-        _state->context = EGL_NO_CONTEXT;
-    }
+    _state.display = EGL_NO_DISPLAY;
+    _state.surface = EGL_NO_SURFACE;
+    _state.context = EGL_NO_CONTEXT;
 }
 
-void window::_handle_app_command(std::int32_t command)
+void window::implementation::handle_app_command(std::int32_t command)
 {
     switch (command) {
     case APP_CMD_INIT_WINDOW:
-        _initialize_native_window();
+        initialize_native_window();
         break;
     case APP_CMD_TERM_WINDOW:
     case APP_CMD_DESTROY:
-        _destroy_native_window();
+        destroy_native_window();
         break;
     default:
         break;
     }
 }
 
-void window::run()
+void window::implementation::run()
 {
     _app->userData = this;
     _app->onAppCmd = [](android_app* app, std::int32_t command) {
-        window* _window = static_cast<window*>(app->userData);
+        implementation* _window = static_cast<implementation*>(app->userData);
         if (_window == nullptr) {
             return;
         }
         try {
-            _window->_handle_app_command(command);
+            _window->handle_app_command(command);
         } catch (const std::exception& exception) {
             __android_log_print(ANDROID_LOG_ERROR, "soundstep", "Android window error: %s", exception.what());
             ANativeActivity_finish(app->activity);
         }
     };
     _app->onInputEvent = [](android_app* app, AInputEvent* event) -> std::int32_t {
-        window* _window = static_cast<window*>(app->userData);
+        implementation* _window = static_cast<implementation*>(app->userData);
         return _window != nullptr && _window->_renderer ? ImGui_ImplAndroid_HandleInputEvent(event) : 0;
     };
 
@@ -204,10 +218,22 @@ void window::run()
             _renderer->begin_frame();
             draw_app(_ctx, nullptr);
             _renderer->render(_ctx.player.status());
-            eglSwapBuffers(_state->display, _state->surface);
+            eglSwapBuffers(_state.display, _state.surface);
         }
     }
-    _destroy_native_window();
+    destroy_native_window();
+}
+
+window::window(context& ctx, android_app* app)
+    : _implementation(std::make_unique<implementation>(ctx, app))
+{
+}
+
+window::~window() = default;
+
+void window::run()
+{
+    _implementation->run();
 }
 
 }
@@ -226,6 +252,7 @@ void window::run()
 
 #include <core/context.hpp>
 #include <core/integration.hpp>
+#include <core/renderer.hpp>
 #include <core/window.hpp>
 #include <widget/app.hpp>
 #include <widget/settings.hpp>
@@ -295,7 +322,19 @@ namespace {
 
 }
 
-window::window(context& ctx)
+struct window::implementation {
+    explicit implementation(context& ctx);
+    ~implementation();
+
+    void run();
+
+    context& _ctx;
+    std::shared_ptr<GLFWwindow> _window { nullptr };
+    std::unique_ptr<renderer> _renderer { nullptr };
+    std::unique_ptr<system_media_transport> _media_transport { nullptr };
+};
+
+window::implementation::implementation(context& ctx)
     : _ctx(ctx)
 {
     if (glfwInit() != GLFW_TRUE) {
@@ -362,7 +401,7 @@ window::window(context& ctx)
     glfwShowWindow(_native_window);
 }
 
-window::~window()
+window::implementation::~implementation()
 {
     _media_transport.reset();
     _ctx.covers.release_textures();
@@ -371,7 +410,7 @@ window::~window()
     glfwTerminate();
 }
 
-void window::run()
+void window::implementation::run()
 {
     while (glfwWindowShouldClose(_window.get()) == GLFW_FALSE) {
         glfwPollEvents();
@@ -385,6 +424,18 @@ void window::run()
 
         glfwSwapBuffers(_window.get());
     }
+}
+
+window::window(context& ctx)
+    : _implementation(std::make_unique<implementation>(ctx))
+{
+}
+
+window::~window() = default;
+
+void window::run()
+{
+    _implementation->run();
 }
 
 }

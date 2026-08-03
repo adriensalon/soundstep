@@ -7,9 +7,10 @@
 
 #include <imgui.h>
 
-struct GLFWwindow;
 #ifdef __ANDROID__
 struct ANativeWindow;
+#else
+struct GLFWwindow;
 #endif
 
 namespace soundstep {
@@ -40,25 +41,15 @@ struct renderer {
     renderer& operator=(renderer&& other) = delete;
 
     [[nodiscard]] ImFont* add_font(std::string_view resource_path, float font_size);
-    void merge_font(
-        std::string_view resource_path,
-        float font_size,
-        ImFont* destination,
-        const ImWchar* glyph_ranges);
+    void merge_font(std::string_view resource_path, float font_size, ImFont* destination, const ImWchar* glyph_ranges);
     void begin_frame();
     void render(const playback_status& playback);
     [[nodiscard]] static renderer_texture create_rgba_texture(const unsigned char* pixels, int width, int height);
     static void destroy_texture(renderer_texture texture) noexcept;
 
 private:
-    struct background_program;
-
-#ifdef __ANDROID__
-    ANativeWindow* _window { nullptr };
-#else
-    std::shared_ptr<GLFWwindow> _window { nullptr };
-#endif
-    std::unique_ptr<background_program> _background;
+    struct implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 }

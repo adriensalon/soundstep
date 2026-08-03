@@ -1,8 +1,8 @@
 [Desktop Entry]
 Type=Application
-Name=Soundstep
+Name=SoundStep
 Comment=Listen to and share music with friends
-Exec=soundstep
+Exec=SoundStep
 Icon=soundstep
 Terminal=false
 Categories=AudioVideo;Audio;Player;

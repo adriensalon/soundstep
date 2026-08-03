@@ -9,6 +9,7 @@ val androidBuildDir = project.findProperty("androidBuildDir") as String?
 val packageDir = project.findProperty("packageDir") as String?
     ?: error("Gradle property 'packageDir' must be provided")
 val targetName = project.findProperty("targetName") as String? ?: "soundstep"
+val appName = "SoundStep"
 val gamePackage = "com.soundstep.app"
 
 if (androidBuildDir != null) {
@@ -60,7 +61,7 @@ tasks.register<Copy>("stageDebugApk") {
     from(layout.buildDirectory.dir("outputs/apk/debug"))
     include("*.apk")
     into(file(packageDir))
-    rename { "$targetName-debug.apk" }
+    rename { "$appName-debug.apk" }
 }
 
 tasks.register<Copy>("stageReleaseApk") {
@@ -68,5 +69,5 @@ tasks.register<Copy>("stageReleaseApk") {
     from(layout.buildDirectory.dir("outputs/apk/release"))
     include("*.apk")
     into(file(packageDir))
-    rename { "$targetName-release.apk" }
+    rename { "$appName-release.apk" }
 }

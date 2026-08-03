@@ -116,7 +116,7 @@ void main()
     vec2 point = uv - 0.5;
     point.x *= resolution.x / max(resolution.y, 1.0);
 
-    float energy = clamp(rms_level * 0.55 + peak_level * 0.20        + bass_level * 0.25, 0.0, 1.0);
+    float energy = clamp(rms_level * 0.55 + peak_level * 0.20 + bass_level * 0.25, 0.0, 1.0);
     float motion = 0.16 + activity * (0.52 + energy * 0.38);
     vec2 warped = point;
     warped += vec2(
@@ -124,10 +124,10 @@ void main()
         sin(point.x * 2.7 - visual_time * 0.58))
         * (0.018 + mid_level * 0.055) * motion;
 
-    float primary = fbm(warped * (2.05 + treble_level * 0.16)        + vec2(visual_time * 0.055, -visual_time * 0.041));
-    float secondary = fbm(warped * 4.15        + vec2(-visual_time * 0.034, visual_time * 0.046) + primary * 0.72);
+    float primary = fbm(warped * (2.05 + treble_level * 0.16) + vec2(visual_time * 0.055, -visual_time * 0.041));
+    float secondary = fbm(warped * 4.15 + vec2(-visual_time * 0.034, visual_time * 0.046) + primary * 0.72);
     float radius = length(warped + vec2(primary - 0.5, secondary - 0.5) * 0.055);
-    float field = primary * 0.68 + secondary * 0.25        + radius * (0.96 + bass_level * 0.30);
+    float field = primary * 0.68 + secondary * 0.25 + radius * (0.96 + bass_level * 0.30);
     field += sin(radius * 19.0 - visual_time * 2.4) * bass_level * 0.035;
 
     float contour_count = 7.0 + bass_level * 2.5 + treble_level * 1.5;
@@ -271,126 +271,148 @@ void main()
 
 }
 
-struct renderer::background_program {
-    background_program()
-        : _program(_create_background_program())
-    {
-        glGenVertexArrays(1, &_vertex_array);
-        if (_vertex_array == 0) {
-            glDeleteProgram(_program);
-            _program = 0;
-            throw renderer_error("Could not create the background shader geometry");
+namespace {
+
+    struct background_program {
+        background_program()
+            : _program(_create_background_program())
+        {
+            glGenVertexArrays(1, &_vertex_array);
+            if (_vertex_array == 0) {
+                glDeleteProgram(_program);
+                _program = 0;
+                throw renderer_error("Could not create the background shader geometry");
+            }
+
+            _resolution_location = glGetUniformLocation(_program, "resolution");
+            _time_location = glGetUniformLocation(_program, "visual_time");
+            _activity_location = glGetUniformLocation(_program, "activity");
+            _rms_location = glGetUniformLocation(_program, "rms_level");
+            _peak_location = glGetUniformLocation(_program, "peak_level");
+            _bass_location = glGetUniformLocation(_program, "bass_level");
+            _mid_location = glGetUniformLocation(_program, "mid_level");
+            _treble_location = glGetUniformLocation(_program, "treble_level");
+            _beat_location = glGetUniformLocation(_program, "beat");
+            _beat_age_location = glGetUniformLocation(_program, "beat_age");
         }
 
-        _resolution_location = glGetUniformLocation(_program, "resolution");
-        _time_location = glGetUniformLocation(_program, "visual_time");
-        _activity_location = glGetUniformLocation(_program, "activity");
-        _rms_location = glGetUniformLocation(_program, "rms_level");
-        _peak_location = glGetUniformLocation(_program, "peak_level");
-        _bass_location = glGetUniformLocation(_program, "bass_level");
-        _mid_location = glGetUniformLocation(_program, "mid_level");
-        _treble_location = glGetUniformLocation(_program, "treble_level");
-        _beat_location = glGetUniformLocation(_program, "beat");
-        _beat_age_location = glGetUniformLocation(_program, "beat_age");
+        ~background_program()
+        {
+            if (_vertex_array != 0) {
+                glDeleteVertexArrays(1, &_vertex_array);
+            }
+            if (_program != 0) {
+                glDeleteProgram(_program);
+            }
+        }
+
+        void draw(int width, int height, const playback_status& playback, float delta_time)
+        {
+            if (width <= 0 || height <= 0) {
+                return;
+            }
+
+            const float _dt = (std::clamp)(delta_time, 0.0f, 0.05f);
+            const float _activity_target = playback.state == playback_state::playing
+                ? 1.0f
+                : (playback.state == playback_state::buffering ? 0.24f : 0.0f);
+            const float _rms_target = (std::clamp)(playback.rms_level * 3.6f, 0.0f, 1.0f);
+            const float _peak_target = (std::clamp)(playback.peak_level * 1.35f, 0.0f, 1.0f);
+            const float _bass_target = (std::clamp)(playback.bass_level * 5.0f, 0.0f, 1.0f);
+            const float _mid_target = (std::clamp)(playback.mid_level * 4.2f, 0.0f, 1.0f);
+            const float _treble_target = (std::clamp)(playback.treble_level * 5.5f, 0.0f, 1.0f);
+
+            _activity = _smoothed_level(_activity, _activity_target, 7.5f, 2.0f, _dt);
+            _rms = _smoothed_level(_rms, _rms_target, 12.0f, 3.0f, _dt);
+            _peak = _smoothed_level(_peak, _peak_target, 18.0f, 4.5f, _dt);
+            _bass = _smoothed_level(_bass, _bass_target, 11.0f, 2.6f, _dt);
+            _mid = _smoothed_level(_mid, _mid_target, 10.0f, 3.2f, _dt);
+            _treble = _smoothed_level(_treble, _treble_target, 15.0f, 5.0f, _dt);
+
+            _beat_cooldown = (std::max)(0.0f, _beat_cooldown - _dt);
+            if (_activity_target > 0.9f && _bass_target - _previous_bass_target > 0.075f && _peak_target > 0.20f && _beat_cooldown <= 0.0f) {
+                _beat = 1.0f;
+                _beat_age = 0.0f;
+                _beat_cooldown = 0.16f;
+            }
+            _previous_bass_target = _bass_target;
+            _beat *= std::exp(-5.2f * _dt);
+            _beat_age += _dt;
+            _visual_time += _dt * (0.08f + _activity * (0.46f + _mid * 0.24f));
+
+            glDisable(GL_BLEND);
+            glDisable(GL_CULL_FACE);
+            glDisable(GL_DEPTH_TEST);
+            glDisable(GL_SCISSOR_TEST);
+            glUseProgram(_program);
+            glUniform2f(_resolution_location, static_cast<float>(width), static_cast<float>(height));
+            glUniform1f(_time_location, _visual_time);
+            glUniform1f(_activity_location, _activity);
+            glUniform1f(_rms_location, _rms);
+            glUniform1f(_peak_location, _peak);
+            glUniform1f(_bass_location, _bass);
+            glUniform1f(_mid_location, _mid);
+            glUniform1f(_treble_location, _treble);
+            glUniform1f(_beat_location, _beat);
+            glUniform1f(_beat_age_location, _beat_age);
+            glBindVertexArray(_vertex_array);
+            glDrawArrays(GL_TRIANGLES, 0, 3);
+            glBindVertexArray(0);
+            glUseProgram(0);
+        }
+
+        GLuint _program { 0 };
+        GLuint _vertex_array { 0 };
+        GLint _resolution_location { -1 };
+        GLint _time_location { -1 };
+        GLint _activity_location { -1 };
+        GLint _rms_location { -1 };
+        GLint _peak_location { -1 };
+        GLint _bass_location { -1 };
+        GLint _mid_location { -1 };
+        GLint _treble_location { -1 };
+        GLint _beat_location { -1 };
+        GLint _beat_age_location { -1 };
+        float _visual_time { 0.0f };
+        float _activity { 0.0f };
+        float _rms { 0.0f };
+        float _peak { 0.0f };
+        float _bass { 0.0f };
+        float _mid { 0.0f };
+        float _treble { 0.0f };
+        float _previous_bass_target { 0.0f };
+        float _beat { 0.0f };
+        float _beat_age { 10.0f };
+        float _beat_cooldown { 0.0f };
+    };
+
+}
+
+struct renderer::implementation {
+#ifdef __ANDROID__
+    explicit implementation(ANativeWindow* native_window)
+        : window(native_window)
+    {
     }
 
-    ~background_program()
+    ANativeWindow* window { nullptr };
+#else
+    explicit implementation(std::shared_ptr<GLFWwindow> native_window)
+        : window(std::move(native_window))
     {
-        if (_vertex_array != 0) {
-            glDeleteVertexArrays(1, &_vertex_array);
-        }
-        if (_program != 0) {
-            glDeleteProgram(_program);
-        }
     }
 
-    void draw(int width, int height, const playback_status& playback, float delta_time)
-    {
-        if (width <= 0 || height <= 0) {
-            return;
-        }
-
-        const float _dt = (std::clamp)(delta_time, 0.0f, 0.05f);
-        const float _activity_target = playback.state == playback_state::playing
-            ? 1.0f
-            : (playback.state == playback_state::buffering ? 0.24f : 0.0f);
-        const float _rms_target = (std::clamp)(playback.rms_level * 3.6f, 0.0f, 1.0f);
-        const float _peak_target = (std::clamp)(playback.peak_level * 1.35f, 0.0f, 1.0f);
-        const float _bass_target = (std::clamp)(playback.bass_level * 5.0f, 0.0f, 1.0f);
-        const float _mid_target = (std::clamp)(playback.mid_level * 4.2f, 0.0f, 1.0f);
-        const float _treble_target = (std::clamp)(playback.treble_level * 5.5f, 0.0f, 1.0f);
-
-        _activity = _smoothed_level(_activity, _activity_target, 7.5f, 2.0f, _dt);
-        _rms = _smoothed_level(_rms, _rms_target, 12.0f, 3.0f, _dt);
-        _peak = _smoothed_level(_peak, _peak_target, 18.0f, 4.5f, _dt);
-        _bass = _smoothed_level(_bass, _bass_target, 11.0f, 2.6f, _dt);
-        _mid = _smoothed_level(_mid, _mid_target, 10.0f, 3.2f, _dt);
-        _treble = _smoothed_level(_treble, _treble_target, 15.0f, 5.0f, _dt);
-
-        _beat_cooldown = (std::max)(0.0f, _beat_cooldown - _dt);
-        if (_activity_target > 0.9f && _bass_target - _previous_bass_target > 0.075f && _peak_target > 0.20f && _beat_cooldown <= 0.0f) {
-            _beat = 1.0f;
-            _beat_age = 0.0f;
-            _beat_cooldown = 0.16f;
-        }
-        _previous_bass_target = _bass_target;
-        _beat *= std::exp(-5.2f * _dt);
-        _beat_age += _dt;
-        _visual_time += _dt * (0.08f + _activity * (0.46f + _mid * 0.24f));
-
-        glDisable(GL_BLEND);
-        glDisable(GL_CULL_FACE);
-        glDisable(GL_DEPTH_TEST);
-        glDisable(GL_SCISSOR_TEST);
-        glUseProgram(_program);
-        glUniform2f(_resolution_location, static_cast<float>(width), static_cast<float>(height));
-        glUniform1f(_time_location, _visual_time);
-        glUniform1f(_activity_location, _activity);
-        glUniform1f(_rms_location, _rms);
-        glUniform1f(_peak_location, _peak);
-        glUniform1f(_bass_location, _bass);
-        glUniform1f(_mid_location, _mid);
-        glUniform1f(_treble_location, _treble);
-        glUniform1f(_beat_location, _beat);
-        glUniform1f(_beat_age_location, _beat_age);
-        glBindVertexArray(_vertex_array);
-        glDrawArrays(GL_TRIANGLES, 0, 3);
-        glBindVertexArray(0);
-        glUseProgram(0);
-    }
-
-    GLuint _program { 0 };
-    GLuint _vertex_array { 0 };
-    GLint _resolution_location { -1 };
-    GLint _time_location { -1 };
-    GLint _activity_location { -1 };
-    GLint _rms_location { -1 };
-    GLint _peak_location { -1 };
-    GLint _bass_location { -1 };
-    GLint _mid_location { -1 };
-    GLint _treble_location { -1 };
-    GLint _beat_location { -1 };
-    GLint _beat_age_location { -1 };
-    float _visual_time { 0.0f };
-    float _activity { 0.0f };
-    float _rms { 0.0f };
-    float _peak { 0.0f };
-    float _bass { 0.0f };
-    float _mid { 0.0f };
-    float _treble { 0.0f };
-    float _previous_bass_target { 0.0f };
-    float _beat { 0.0f };
-    float _beat_age { 10.0f };
-    float _beat_cooldown { 0.0f };
+    std::shared_ptr<GLFWwindow> window { nullptr };
+#endif
+    std::unique_ptr<background_program> background { nullptr };
 };
 
 #ifdef __ANDROID__
 renderer::renderer(ANativeWindow* window)
-    : _window(window)
 #else
 renderer::renderer(std::shared_ptr<GLFWwindow> window)
-    : _window(std::move(window))
 #endif
+    : _implementation(std::make_unique<implementation>(std::move(window)))
 {
 #ifndef __ANDROID__
     if (gladLoadGL(reinterpret_cast<GLADloadfunc>(glfwGetProcAddress)) == 0) {
@@ -415,12 +437,12 @@ renderer::renderer(std::shared_ptr<GLFWwindow> window)
     _style.TabRounding = _rounding;
 
 #ifdef __ANDROID__
-    if (!ImGui_ImplAndroid_Init(_window)) {
+    if (!ImGui_ImplAndroid_Init(_implementation->window)) {
         ImGui::DestroyContext();
         throw renderer_error("Failed to initialize the ImGui Android backend");
     }
 #else
-    if (!ImGui_ImplGlfw_InitForOpenGL(_window.get(), true)) {
+    if (!ImGui_ImplGlfw_InitForOpenGL(_implementation->window.get(), true)) {
         ImGui::DestroyContext();
         throw renderer_error("Failed to initialize the ImGui GLFW backend");
     }
@@ -443,7 +465,7 @@ renderer::renderer(std::shared_ptr<GLFWwindow> window)
     }
 
     try {
-        _background = std::make_unique<background_program>();
+        _implementation->background = std::make_unique<background_program>();
     } catch (...) {
         ImGui_ImplOpenGL3_Shutdown();
 #ifdef __ANDROID__
@@ -458,7 +480,7 @@ renderer::renderer(std::shared_ptr<GLFWwindow> window)
 
 renderer::~renderer()
 {
-    _background.reset();
+    _implementation->background.reset();
     ImGui_ImplOpenGL3_Shutdown();
 #ifdef __ANDROID__
     ImGui_ImplAndroid_Shutdown();
@@ -542,16 +564,16 @@ void renderer::render(const playback_status& playback)
     int _width = 0;
     int _height = 0;
 #ifdef __ANDROID__
-    _width = ANativeWindow_getWidth(_window);
-    _height = ANativeWindow_getHeight(_window);
+    _width = ANativeWindow_getWidth(_implementation->window);
+    _height = ANativeWindow_getHeight(_implementation->window);
 #else
-    glfwGetFramebufferSize(_window.get(), &_width, &_height);
+    glfwGetFramebufferSize(_implementation->window.get(), &_width, &_height);
 #endif
     glViewport(0, 0, _width, _height);
     glClearColor(0.055f, 0.055f, 0.055f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
-    _background->draw(_width, _height, playback, ImGui::GetIO().DeltaTime);
+    _implementation->background->draw(_width, _height, playback, ImGui::GetIO().DeltaTime);
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
