@@ -24,6 +24,7 @@ struct cover_cache {
     ~cover_cache();
 
     [[nodiscard]] std::optional<renderer_texture> texture(const track& track);
+    void request(const track& track) noexcept;
     void release_textures() noexcept;
 
 private:

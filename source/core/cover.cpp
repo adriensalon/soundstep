@@ -178,6 +178,14 @@ std::optional<renderer_texture> cover_cache::texture(const track& track)
     }
 }
 
+void cover_cache::request(const track& track) noexcept
+{
+    try {
+        _implementation->request(track);
+    } catch (...) {
+    }
+}
+
 void cover_cache::release_textures() noexcept
 {
     _implementation->release_textures();

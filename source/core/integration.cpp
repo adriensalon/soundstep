@@ -15,6 +15,7 @@
 #include <roapi.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.h>
+#include <winrt/Windows.Storage.Streams.h>
 #include <winrt/base.h>
 
 #include <widget/library.hpp>
@@ -24,6 +25,7 @@ namespace {
 
     namespace _media = winrt::Windows::Media;
     namespace _foundation = winrt::Windows::Foundation;
+    namespace _streams = winrt::Windows::Storage::Streams;
 
     enum struct _transport_request_kind {
         play,
@@ -61,6 +63,17 @@ namespace {
             return _media::MediaPlaybackStatus::Closed;
         }
         return _media::MediaPlaybackStatus::Closed;
+    }
+
+    _streams::RandomAccessStreamReference _cover_reference(const cover_art& cover)
+    {
+        _streams::InMemoryRandomAccessStream _stream;
+        _streams::DataWriter _writer(_stream);
+        _writer.WriteBytes({ cover.bytes.data(), cover.bytes.data() + cover.bytes.size() });
+        _writer.StoreAsync().get();
+        _writer.DetachStream();
+        _stream.Seek(0);
+        return _streams::RandomAccessStreamReference::CreateFromStream(_stream);
     }
 
 }
@@ -214,18 +227,29 @@ struct system_media_transport::implementation {
         }
     }
 
-    void update_metadata(const context& ctx)
+    void update_metadata(context& ctx)
     {
         std::string _identity;
         if (ctx.current_track) {
             _identity = ctx.current_track->catalog_id + "\n" + ctx.current_track->id + "\n"
                 + ctx.current_track->title + "\n" + ctx.current_track->artist + "\n"
-                + ctx.current_track->album + "\n" + std::to_string(ctx.current_track->track_number);
+                + ctx.current_track->album + "\n" + std::to_string(ctx.current_track->track_number) + "\n"
+                + ctx.current_track->cover_hash;
         }
-        if (_identity == _metadata_identity) {
+        const bool _metadata_changed = _identity != _metadata_identity;
+        const std::string _desired_cover = ctx.current_track ? ctx.current_track->cover_hash : std::string { };
+        const std::chrono::steady_clock::time_point _now = std::chrono::steady_clock::now();
+        const bool _cover_pending = !_desired_cover.empty()
+            && _thumbnail_hash != _desired_cover
+            && _now >= _next_thumbnail_update;
+        if (!_metadata_changed && !_cover_pending) {
             return;
         }
-        _metadata_identity = std::move(_identity);
+        if (_metadata_changed) {
+            _metadata_identity = std::move(_identity);
+            _thumbnail_hash.clear();
+            _next_thumbnail_update = { };
+        }
 
         _media::SystemMediaTransportControlsDisplayUpdater _updater = _controls.DisplayUpdater();
         _updater.ClearAll();
@@ -237,6 +261,21 @@ struct system_media_transport::implementation {
             _properties.AlbumArtist(winrt::to_hstring(ctx.current_track->artist));
             _properties.AlbumTitle(winrt::to_hstring(ctx.current_track->album));
             _properties.TrackNumber(ctx.current_track->track_number);
+
+            if (!ctx.current_track->cover_hash.empty()) {
+                try {
+                    const std::optional<cover_art> _cover = ctx.store.cover(ctx.current_track->cover_hash);
+                    if (_cover) {
+                        _updater.Thumbnail(_cover_reference(*_cover));
+                        _thumbnail_hash = ctx.current_track->cover_hash;
+                    } else {
+                        ctx.covers.request(*ctx.current_track);
+                        _next_thumbnail_update = _now + std::chrono::seconds(1);
+                    }
+                } catch (...) {
+                    _next_thumbnail_update = _now + std::chrono::seconds(1);
+                }
+            }
         }
         _updater.Update();
     }
@@ -314,6 +353,8 @@ struct system_media_transport::implementation {
     std::mutex _request_mutex;
     std::deque<_transport_request> _requests;
     std::string _metadata_identity;
+    std::string _thumbnail_hash;
+    std::chrono::steady_clock::time_point _next_thumbnail_update { };
     std::chrono::steady_clock::time_point _next_timeline_update { };
     _media::MediaPlaybackStatus _last_status { _media::MediaPlaybackStatus::Closed };
     bool _last_has_source { false };
