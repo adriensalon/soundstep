@@ -7,14 +7,19 @@
 #include <chrono>
 #include <cmath>
 #include <deque>
+#include <filesystem>
+#include <fstream>
 #include <mutex>
+#include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 
 #include <SystemMediaTransportControlsInterop.h>
 #include <roapi.h>
 #include <winrt/Windows.Foundation.h>
 #include <winrt/Windows.Media.h>
+#include <winrt/Windows.Storage.h>
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/base.h>
 
@@ -25,6 +30,7 @@ namespace {
 
     namespace _media = winrt::Windows::Media;
     namespace _foundation = winrt::Windows::Foundation;
+    namespace _storage = winrt::Windows::Storage;
     namespace _streams = winrt::Windows::Storage::Streams;
 
     enum struct _transport_request_kind {
@@ -65,15 +71,35 @@ namespace {
         return _media::MediaPlaybackStatus::Closed;
     }
 
-    _streams::RandomAccessStreamReference _cover_reference(const cover_art& cover)
+    struct _cover_thumbnail {
+        _storage::StorageFile file { nullptr };
+        _streams::RandomAccessStreamReference reference { nullptr };
+    };
+
+    _cover_thumbnail _create_cover_thumbnail(const cover_art& cover, std::filesystem::path& directory)
     {
-        _streams::InMemoryRandomAccessStream _stream;
-        _streams::DataWriter _writer(_stream);
-        _writer.WriteBytes({ cover.bytes.data(), cover.bytes.data() + cover.bytes.size() });
-        _writer.StoreAsync().get();
-        _writer.DetachStream();
-        _stream.Seek(0);
-        return _streams::RandomAccessStreamReference::CreateFromStream(_stream);
+        if (directory.empty()) {
+            directory = std::filesystem::temp_directory_path()
+                / ("SoundStep-" + std::to_string(GetCurrentProcessId()) + "-" + std::to_string(GetTickCount64()));
+            std::filesystem::create_directories(directory);
+        }
+
+        const std::string _extension = cover.content_type == "image/png" ? ".png" : ".jpg";
+        const std::filesystem::path _path = directory / (cover.hash + _extension);
+        std::ofstream _output(_path, std::ios::binary | std::ios::trunc);
+        if (!_output) {
+            throw std::runtime_error("Could not create the Windows media thumbnail file");
+        }
+        _output.write(reinterpret_cast<const char*>(cover.bytes.data()), static_cast<std::streamsize>(cover.bytes.size()));
+        _output.close();
+        if (!_output) {
+            throw std::runtime_error("Could not write the Windows media thumbnail file");
+        }
+
+        _cover_thumbnail _result;
+        _result.file = _storage::StorageFile::GetFileFromPathAsync(_path.wstring()).get();
+        _result.reference = _streams::RandomAccessStreamReference::CreateFromFile(_result.file);
+        return _result;
     }
 
 }
@@ -163,7 +189,15 @@ struct system_media_transport::implementation {
         }
         _position_handler_registered = false;
         _button_handler_registered = false;
+        _thumbnail_reference = nullptr;
+        _thumbnail_file = nullptr;
         _controls = nullptr;
+
+        if (!_thumbnail_directory.empty()) {
+            std::error_code _filesystem_error;
+            std::filesystem::remove_all(_thumbnail_directory, _filesystem_error);
+            _thumbnail_directory.clear();
+        }
 
         if (_apartment_initialized) {
             RoUninitialize();
@@ -248,6 +282,8 @@ struct system_media_transport::implementation {
         if (_metadata_changed) {
             _metadata_identity = std::move(_identity);
             _thumbnail_hash.clear();
+            _thumbnail_reference = nullptr;
+            _thumbnail_file = nullptr;
             _next_thumbnail_update = { };
         }
 
@@ -266,7 +302,10 @@ struct system_media_transport::implementation {
                 try {
                     const std::optional<cover_art> _cover = ctx.store.cover(ctx.current_track->cover_hash);
                     if (_cover) {
-                        _updater.Thumbnail(_cover_reference(*_cover));
+                        _cover_thumbnail _thumbnail = _create_cover_thumbnail(*_cover, _thumbnail_directory);
+                        _thumbnail_file = std::move(_thumbnail.file);
+                        _thumbnail_reference = std::move(_thumbnail.reference);
+                        _updater.Thumbnail(_thumbnail_reference);
                         _thumbnail_hash = ctx.current_track->cover_hash;
                     } else {
                         ctx.covers.request(*ctx.current_track);
@@ -354,6 +393,9 @@ struct system_media_transport::implementation {
     std::deque<_transport_request> _requests;
     std::string _metadata_identity;
     std::string _thumbnail_hash;
+    std::filesystem::path _thumbnail_directory;
+    _storage::StorageFile _thumbnail_file { nullptr };
+    _streams::RandomAccessStreamReference _thumbnail_reference { nullptr };
     std::chrono::steady_clock::time_point _next_thumbnail_update { };
     std::chrono::steady_clock::time_point _next_timeline_update { };
     _media::MediaPlaybackStatus _last_status { _media::MediaPlaybackStatus::Closed };
