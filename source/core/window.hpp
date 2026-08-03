@@ -17,7 +17,7 @@ struct window_error : std::runtime_error {
 
 struct window {
 #ifdef __ANDROID__
-    window(context& ctx, android_app* app);
+    explicit window(context& ctx, android_app* app);
 #else
     explicit window(context& ctx);
 #endif

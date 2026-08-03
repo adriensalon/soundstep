@@ -88,7 +88,7 @@ if(WIN32)
         "${SOUNDSTEP_PLATFORM_DIR}/win32/soundstep.rc")
     target_compile_definitions(soundstep PRIVATE
         _SILENCE_EXPERIMENTAL_COROUTINE_DEPRECATION_WARNINGS)
-    target_link_libraries(soundstep PRIVATE ws2_32 iphlpapi runtimeobject)
+    target_link_libraries(soundstep PRIVATE ws2_32 iphlpapi runtimeobject shell32)
 elseif(UNIX AND NOT APPLE AND NOT ANDROID)
     include(GNUInstallDirs)
     install(TARGETS soundstep RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")

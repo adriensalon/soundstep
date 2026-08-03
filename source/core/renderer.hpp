@@ -33,12 +33,11 @@ struct renderer {
 #else
     explicit renderer(std::shared_ptr<GLFWwindow> window);
 #endif
-    ~renderer();
-
     renderer(const renderer& other) = delete;
     renderer& operator=(const renderer& other) = delete;
     renderer(renderer&& other) = delete;
     renderer& operator=(renderer&& other) = delete;
+    ~renderer();
 
     [[nodiscard]] ImFont* add_font(std::string_view resource_path, float font_size);
     void merge_font(std::string_view resource_path, float font_size, ImFont* destination, const ImWchar* glyph_ranges);

@@ -245,6 +245,9 @@ void window::run()
 #ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#include <shellapi.h>
+
+#include "../../platform/win32/resource.h"
 #endif
 #include <cmrc/cmrc.hpp>
 #include <imgui.h>
@@ -261,6 +264,13 @@ CMRC_DECLARE(soundstep_resource);
 
 namespace soundstep {
 namespace {
+
+#ifdef _WIN32
+    constexpr UINT _tray_callback_message = WM_APP + 1;
+    constexpr UINT _tray_exit_command = 0x1001;
+    constexpr UINT _tray_show_command = 0x1002;
+    constexpr wchar_t _tray_window_property[] = L"SoundStep.WindowImplementation";
+#endif
 
     void _center_window(GLFWwindow* window)
     {
@@ -328,11 +338,138 @@ struct window::implementation {
 
     void run();
 
+#ifdef _WIN32
+    static LRESULT CALLBACK window_procedure(HWND native_window, UINT message, WPARAM word_parameter, LPARAM long_parameter);
+    void install_tray_icon();
+    void remove_tray_icon() noexcept;
+    void restore_from_tray();
+    void show_tray_menu();
+#endif
+
     context& _ctx;
     std::shared_ptr<GLFWwindow> _window { nullptr };
     std::unique_ptr<renderer> _renderer { nullptr };
     std::unique_ptr<system_media_transport> _media_transport { nullptr };
+#ifdef _WIN32
+    HWND _native_window { nullptr };
+    WNDPROC _original_window_procedure { nullptr };
+    NOTIFYICONDATAW _tray_icon { };
+    bool _tray_icon_added { false };
+    bool _exit_requested { false };
+#endif
 };
+
+#ifdef _WIN32
+LRESULT CALLBACK window::implementation::window_procedure(HWND native_window, UINT message, WPARAM word_parameter, LPARAM long_parameter)
+{
+    implementation* _self = reinterpret_cast<implementation*>(GetPropW(native_window, _tray_window_property));
+    if (_self != nullptr) {
+        if (message == _tray_callback_message) {
+            switch (static_cast<UINT>(long_parameter)) {
+            case WM_LBUTTONUP:
+            case WM_LBUTTONDBLCLK:
+                _self->restore_from_tray();
+                break;
+            case WM_RBUTTONUP:
+            case WM_CONTEXTMENU:
+                _self->show_tray_menu();
+                break;
+            default:
+                break;
+            }
+            return 0;
+        }
+        if (message == WM_COMMAND) {
+            switch (LOWORD(word_parameter)) {
+            case _tray_show_command:
+                _self->restore_from_tray();
+                return 0;
+            case _tray_exit_command:
+                _self->_exit_requested = true;
+                glfwSetWindowShouldClose(_self->_window.get(), GLFW_TRUE);
+                return 0;
+            default:
+                break;
+            }
+        }
+        return CallWindowProcW(_self->_original_window_procedure, native_window, message, word_parameter, long_parameter);
+    }
+    return DefWindowProcW(native_window, message, word_parameter, long_parameter);
+}
+
+void window::implementation::install_tray_icon()
+{
+    if (_native_window == nullptr || SetPropW(_native_window, _tray_window_property, reinterpret_cast<HANDLE>(this)) == FALSE) {
+        throw window_error("Failed to initialize the SoundStep tray icon");
+    }
+
+    SetLastError(ERROR_SUCCESS);
+    const LONG_PTR _previous = SetWindowLongPtrW(_native_window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&window_procedure));
+    if (_previous == 0 && GetLastError() != ERROR_SUCCESS) {
+        RemovePropW(_native_window, _tray_window_property);
+        throw window_error("Failed to receive SoundStep tray icon events");
+    }
+    _original_window_procedure = reinterpret_cast<WNDPROC>(_previous);
+
+    _tray_icon.cbSize = sizeof(_tray_icon);
+    _tray_icon.hWnd = _native_window;
+    _tray_icon.uID = 1;
+    _tray_icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
+    _tray_icon.uCallbackMessage = _tray_callback_message;
+    _tray_icon.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_SOUNDSTEP_ICON));
+    if (_tray_icon.hIcon == nullptr) {
+        _tray_icon.hIcon = LoadIconW(nullptr, MAKEINTRESOURCEW(32512));
+    }
+    lstrcpynW(_tray_icon.szTip, L"SoundStep", static_cast<int>(std::size(_tray_icon.szTip)));
+
+    if (Shell_NotifyIconW(NIM_ADD, &_tray_icon) == FALSE) {
+        remove_tray_icon();
+        throw window_error("Failed to add the SoundStep tray icon");
+    }
+    _tray_icon_added = true;
+}
+
+void window::implementation::remove_tray_icon() noexcept
+{
+    if (_tray_icon_added) {
+        Shell_NotifyIconW(NIM_DELETE, &_tray_icon);
+        _tray_icon_added = false;
+    }
+    if (_native_window != nullptr && IsWindow(_native_window) != FALSE) {
+        if (_original_window_procedure != nullptr) {
+            SetWindowLongPtrW(_native_window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(_original_window_procedure));
+            _original_window_procedure = nullptr;
+        }
+        RemovePropW(_native_window, _tray_window_property);
+    }
+}
+
+void window::implementation::restore_from_tray()
+{
+    glfwShowWindow(_window.get());
+    glfwRestoreWindow(_window.get());
+    glfwFocusWindow(_window.get());
+}
+
+void window::implementation::show_tray_menu()
+{
+    HMENU _menu = CreatePopupMenu();
+    if (_menu == nullptr) {
+        return;
+    }
+    AppendMenuW(_menu, MF_STRING, _tray_show_command, L"Show");
+    AppendMenuW(_menu, MF_SEPARATOR, 0, nullptr);
+    AppendMenuW(_menu, MF_STRING, _tray_exit_command, L"Exit");
+    SetMenuDefaultItem(_menu, _tray_show_command, FALSE);
+
+    POINT _cursor { };
+    GetCursorPos(&_cursor);
+    SetForegroundWindow(_native_window);
+    TrackPopupMenu(_menu, TPM_LEFTALIGN | TPM_BOTTOMALIGN | TPM_RIGHTBUTTON, _cursor.x, _cursor.y, 0, _native_window, nullptr);
+    DestroyMenu(_menu);
+    PostMessageW(_native_window, WM_NULL, 0, 0);
+}
+#endif
 
 window::implementation::implementation(context& ctx)
     : _ctx(ctx)
@@ -354,6 +491,13 @@ window::implementation::implementation(context& ctx)
     }
 
     _window = std::shared_ptr<GLFWwindow>(_native_window, glfwDestroyWindow);
+#ifdef _WIN32
+    this->_native_window = glfwGetWin32Window(_native_window);
+    glfwSetWindowCloseCallback(_native_window, [](GLFWwindow* window) {
+        glfwSetWindowShouldClose(window, GLFW_FALSE);
+        glfwHideWindow(window);
+    });
+#endif
     glfwSetWindowSizeLimits(_native_window, 760, 480, GLFW_DONT_CARE, GLFW_DONT_CARE);
     _center_window(_native_window);
     _set_window_icon(_native_window);
@@ -363,7 +507,7 @@ window::implementation::implementation(context& ctx)
     try {
         _renderer = std::make_unique<renderer>(_window);
 #ifdef _WIN32
-        _media_transport = std::make_unique<system_media_transport>(glfwGetWin32Window(_native_window));
+        _media_transport = std::make_unique<system_media_transport>(this->_native_window);
 #endif
         _ctx.fonts.ui = _renderer->add_font("font/pp fraktion.otf", 16.0f);
         static constexpr ImWchar _icon_ranges[] = {
@@ -392,7 +536,15 @@ window::implementation::implementation(context& ctx)
         if (_ctx.store.config().library_path.empty()) {
             open_settings(_ctx);
         }
+#ifdef _WIN32
+        install_tray_icon();
+#endif
     } catch (...) {
+#ifdef _WIN32
+        remove_tray_icon();
+#endif
+        _media_transport.reset();
+        _renderer.reset();
         _window.reset();
         glfwTerminate();
         throw;
@@ -403,6 +555,9 @@ window::implementation::implementation(context& ctx)
 
 window::implementation::~implementation()
 {
+#ifdef _WIN32
+    remove_tray_icon();
+#endif
     _media_transport.reset();
     _ctx.covers.release_textures();
     _renderer.reset();
@@ -412,6 +567,39 @@ window::implementation::~implementation()
 
 void window::implementation::run()
 {
+#ifdef _WIN32
+    while (!_exit_requested) {
+        if (glfwGetWindowAttrib(_window.get(), GLFW_VISIBLE) == GLFW_TRUE) {
+            glfwPollEvents();
+        } else {
+            glfwWaitEventsTimeout(0.25);
+        }
+
+        if (_exit_requested) {
+            break;
+        }
+        if (glfwWindowShouldClose(_window.get()) == GLFW_TRUE) {
+            glfwSetWindowShouldClose(_window.get(), GLFW_FALSE);
+            glfwHideWindow(_window.get());
+            continue;
+        }
+        if (glfwGetWindowAttrib(_window.get(), GLFW_VISIBLE) == GLFW_FALSE) {
+            if (_media_transport) {
+                _media_transport->update(_ctx);
+            }
+            continue;
+        }
+
+        _renderer->begin_frame();
+        draw_app(_ctx, _window.get());
+        if (_media_transport) {
+            _media_transport->update(_ctx);
+        }
+        _renderer->render(_ctx.player.status());
+
+        glfwSwapBuffers(_window.get());
+    }
+#else
     while (glfwWindowShouldClose(_window.get()) == GLFW_FALSE) {
         glfwPollEvents();
 
@@ -424,6 +612,7 @@ void window::implementation::run()
 
         glfwSwapBuffers(_window.get());
     }
+#endif
 }
 
 window::window(context& ctx)
