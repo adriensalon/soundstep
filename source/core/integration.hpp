@@ -18,7 +18,7 @@ struct system_media_transport {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 }

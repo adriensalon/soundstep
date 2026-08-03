@@ -43,8 +43,7 @@ namespace {
 #define SOUNDSTEP_GLSL_PRECISION ""
 #endif
 
-    constexpr const char* _background_vertex_shader =
-SOUNDSTEP_GLSL_VERSION R"glsl(
+    constexpr const char* _background_vertex_shader = SOUNDSTEP_GLSL_VERSION R"glsl(
 
 out vec2 vertex_uv;
 
@@ -63,8 +62,7 @@ void main()
 }
 )glsl";
 
-    constexpr const char* _background_fragment_shader =
-SOUNDSTEP_GLSL_VERSION SOUNDSTEP_GLSL_PRECISION R"glsl(
+    constexpr const char* _background_fragment_shader = SOUNDSTEP_GLSL_VERSION SOUNDSTEP_GLSL_PRECISION R"glsl(
 
 in vec2 vertex_uv;
 out vec4 fragment_color;
@@ -118,8 +116,7 @@ void main()
     vec2 point = uv - 0.5;
     point.x *= resolution.x / max(resolution.y, 1.0);
 
-    float energy = clamp(rms_level * 0.55 + peak_level * 0.20
-        + bass_level * 0.25, 0.0, 1.0);
+    float energy = clamp(rms_level * 0.55 + peak_level * 0.20        + bass_level * 0.25, 0.0, 1.0);
     float motion = 0.16 + activity * (0.52 + energy * 0.38);
     vec2 warped = point;
     warped += vec2(
@@ -127,13 +124,10 @@ void main()
         sin(point.x * 2.7 - visual_time * 0.58))
         * (0.018 + mid_level * 0.055) * motion;
 
-    float primary = fbm(warped * (2.05 + treble_level * 0.16)
-        + vec2(visual_time * 0.055, -visual_time * 0.041));
-    float secondary = fbm(warped * 4.15
-        + vec2(-visual_time * 0.034, visual_time * 0.046) + primary * 0.72);
+    float primary = fbm(warped * (2.05 + treble_level * 0.16)        + vec2(visual_time * 0.055, -visual_time * 0.041));
+    float secondary = fbm(warped * 4.15        + vec2(-visual_time * 0.034, visual_time * 0.046) + primary * 0.72);
     float radius = length(warped + vec2(primary - 0.5, secondary - 0.5) * 0.055);
-    float field = primary * 0.68 + secondary * 0.25
-        + radius * (0.96 + bass_level * 0.30);
+    float field = primary * 0.68 + secondary * 0.25        + radius * (0.96 + bass_level * 0.30);
     field += sin(radius * 19.0 - visual_time * 2.4) * bass_level * 0.035;
 
     float contour_count = 7.0 + bass_level * 2.5 + treble_level * 1.5;
@@ -187,8 +181,7 @@ void main()
         glGetShaderiv(_shader, GL_INFO_LOG_LENGTH, &_log_size);
         std::vector<char> _log(static_cast<std::size_t>((std::max)(_log_size, 1)));
         glGetShaderInfoLog(_shader, _log_size, nullptr, _log.data());
-        const std::string _message = "Could not compile the background shader: "
-            + std::string(_log.data());
+        const std::string _message = "Could not compile the background shader: " + std::string(_log.data());
         glDeleteShader(_shader);
         throw renderer_error(_message);
     }
@@ -215,8 +208,7 @@ void main()
                 glGetProgramiv(_program, GL_INFO_LOG_LENGTH, &_log_size);
                 std::vector<char> _log(static_cast<std::size_t>((std::max)(_log_size, 1)));
                 glGetProgramInfoLog(_program, _log_size, nullptr, _log.data());
-                throw renderer_error(
-                    "Could not link the background shader: " + std::string(_log.data()));
+                throw renderer_error("Could not link the background shader: " + std::string(_log.data()));
             }
         } catch (...) {
             if (_program != 0) {
@@ -336,10 +328,7 @@ struct renderer::background_program {
         _treble = _smoothed_level(_treble, _treble_target, 15.0f, 5.0f, _dt);
 
         _beat_cooldown = (std::max)(0.0f, _beat_cooldown - _dt);
-        if (_activity_target > 0.9f
-            && _bass_target - _previous_bass_target > 0.075f
-            && _peak_target > 0.20f
-            && _beat_cooldown <= 0.0f) {
+        if (_activity_target > 0.9f && _bass_target - _previous_bass_target > 0.075f && _peak_target > 0.20f && _beat_cooldown <= 0.0f) {
             _beat = 1.0f;
             _beat_age = 0.0f;
             _beat_cooldown = 0.16f;
@@ -496,22 +485,14 @@ ImFont* renderer::add_font(std::string_view resource_path, float font_size)
     ImGuiIO& _io = ImGui::GetIO();
     ImFontConfig _config;
     _config.FontDataOwnedByAtlas = false;
-    ImFont* _font = _io.Fonts->AddFontFromMemoryTTF(
-        const_cast<char*>(_data.begin()),
-        static_cast<int>(_data_size),
-        font_size,
-        &_config);
+    ImFont* _font = _io.Fonts->AddFontFromMemoryTTF(const_cast<char*>(_data.begin()), static_cast<int>(_data_size), font_size, &_config);
     if (_font == nullptr) {
         throw renderer_error("Failed to load embedded font: " + _path);
     }
     return _font;
 }
 
-void renderer::merge_font(
-    std::string_view resource_path,
-    float font_size,
-    ImFont* destination,
-    const ImWchar* glyph_ranges)
+void renderer::merge_font(std::string_view resource_path, float font_size, ImFont* destination, const ImWchar* glyph_ranges)
 {
     if (destination == nullptr) {
         throw renderer_error("Cannot merge an embedded font into a null destination");
@@ -535,12 +516,7 @@ void renderer::merge_font(
     _config.DstFont = destination;
     _config.PixelSnapH = true;
     _config.GlyphOffset.y = 3.0f;
-    ImFont* _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(
-        const_cast<char*>(_data.begin()),
-        static_cast<int>(_data_size),
-        font_size,
-        &_config,
-        glyph_ranges);
+    ImFont* _font = ImGui::GetIO().Fonts->AddFontFromMemoryTTF(const_cast<char*>(_data.begin()), static_cast<int>(_data_size), font_size, &_config, glyph_ranges);
     if (_font == nullptr) {
         throw renderer_error("Failed to merge embedded font: " + _path);
     }
@@ -580,10 +556,7 @@ void renderer::render(const playback_status& playback)
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }
 
-renderer_texture renderer::create_rgba_texture(
-    const unsigned char* pixels,
-    int width,
-    int height)
+renderer_texture renderer::create_rgba_texture(const unsigned char* pixels, int width, int height)
 {
     if (pixels == nullptr || width <= 0 || height <= 0) {
         throw renderer_error("Invalid texture image");
@@ -601,23 +574,10 @@ renderer_texture renderer::create_rgba_texture(
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
-    glTexImage2D(
-        GL_TEXTURE_2D,
-        0,
-        GL_RGBA,
-        width,
-        height,
-        0,
-        GL_RGBA,
-        GL_UNSIGNED_BYTE,
-        pixels);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    return {
-        static_cast<std::uintptr_t>(_texture),
-        width,
-        height
-    };
+    return { static_cast<std::uintptr_t>(_texture), width, height };
 }
 
 void renderer::destroy_texture(renderer_texture texture) noexcept

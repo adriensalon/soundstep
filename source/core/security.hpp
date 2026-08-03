@@ -12,9 +12,9 @@ struct security_error : std::runtime_error {
 };
 
 struct transport_identity {
-    std::string certificate_pem;
-    std::string private_key_pem;
-    std::string fingerprint;
+    std::string certificate_pem { };
+    std::string private_key_pem { };
+    std::string fingerprint { };
 };
 
 [[nodiscard]] transport_identity create_transport_identity();

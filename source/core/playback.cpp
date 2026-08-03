@@ -50,13 +50,7 @@ namespace {
 struct playback::implementation {
     implementation()
     {
-        ma_result _result = ma_pcm_rb_init(
-            ma_format_f32,
-            _output_channels,
-            _buffer_frame_count,
-            nullptr,
-            nullptr,
-            &_buffer);
+        ma_result _result = ma_pcm_rb_init(ma_format_f32, _output_channels, _buffer_frame_count, nullptr, nullptr, &_buffer);
         if (_result != MA_SUCCESS) {
             throw playback_error(_miniaudio_error("Could not create playback buffer", _result));
         }
@@ -187,10 +181,7 @@ struct playback::implementation {
 
         if (_frames_written < frame_count) {
             float* _remaining = output + static_cast<std::size_t>(_frames_written) * _output_channels;
-            std::memset(
-                _remaining,
-                0,
-                static_cast<std::size_t>(frame_count - _frames_written) * _output_channels * sizeof(float));
+            std::memset(_remaining, 0, static_cast<std::size_t>(frame_count - _frames_written) * _output_channels * sizeof(float));
 
             if (_decoder_finished.load(std::memory_order_acquire) && ma_pcm_rb_available_read(&_buffer) == 0) {
                 _play_requested.store(false, std::memory_order_release);
@@ -210,11 +201,8 @@ struct playback::implementation {
             return;
         }
 
-        // Two inexpensive one-pole low-pass filters split the audible output
-        // into broad bass, mid, and treble energy without doing FFT work on
-        // the real-time audio thread.
-        constexpr float _bass_alpha = 0.02329f; // Approximately 180 Hz at 48 kHz.
-        constexpr float _mid_alpha = 0.26960f; // Approximately 2.4 kHz at 48 kHz.
+        constexpr float _bass_alpha = 0.02329f; // Approximately 180 Hz at 48 kHz
+        constexpr float _mid_alpha = 0.26960f; // Approximately 2.4 kHz at 48 kHz
         double _sum_squares = 0.0;
         double _bass_squares = 0.0;
         double _mid_squares = 0.0;
@@ -232,8 +220,7 @@ struct playback::implementation {
             const float _mid = _mid_filter - _bass_filter;
             const float _treble = _mono - _mid_filter;
 
-            _sum_squares += static_cast<double>(_left) * _left
-                + static_cast<double>(_right) * _right;
+            _sum_squares += static_cast<double>(_left) * _left + static_cast<double>(_right) * _right;
             _bass_squares += static_cast<double>(_bass) * _bass;
             _mid_squares += static_cast<double>(_mid) * _mid;
             _treble_squares += static_cast<double>(_treble) * _treble;
@@ -241,19 +228,11 @@ struct playback::implementation {
         }
 
         const double _inverse_frames = 1.0 / static_cast<double>(frame_count);
-        _rms_level.store(
-            static_cast<float>(std::sqrt(_sum_squares * _inverse_frames * 0.5)),
-            std::memory_order_relaxed);
+        _rms_level.store(static_cast<float>(std::sqrt(_sum_squares * _inverse_frames * 0.5)), std::memory_order_relaxed);
         _peak_level.store(_peak, std::memory_order_relaxed);
-        _bass_level.store(
-            static_cast<float>(std::sqrt(_bass_squares * _inverse_frames)),
-            std::memory_order_relaxed);
-        _mid_level.store(
-            static_cast<float>(std::sqrt(_mid_squares * _inverse_frames)),
-            std::memory_order_relaxed);
-        _treble_level.store(
-            static_cast<float>(std::sqrt(_treble_squares * _inverse_frames)),
-            std::memory_order_relaxed);
+        _bass_level.store(static_cast<float>(std::sqrt(_bass_squares * _inverse_frames)), std::memory_order_relaxed);
+        _mid_level.store(static_cast<float>(std::sqrt(_mid_squares * _inverse_frames)), std::memory_order_relaxed);
+        _treble_level.store(static_cast<float>(std::sqrt(_treble_squares * _inverse_frames)), std::memory_order_relaxed);
     }
 
     void clear_analysis_levels() noexcept
@@ -283,11 +262,7 @@ struct playback::implementation {
             }
 
             ma_uint64 _decoded = 0;
-            const ma_result _decode_result = ma_decoder_read_pcm_frames(
-                &_decoder,
-                _destination,
-                _requested,
-                &_decoded);
+            const ma_result _decode_result = ma_decoder_read_pcm_frames(&_decoder, _destination, _requested, &_decoded);
             ma_pcm_rb_commit_write(&_buffer, static_cast<ma_uint32>(_decoded));
 
             if (_decode_result != MA_SUCCESS && _decode_result != MA_AT_END) {
@@ -304,9 +279,7 @@ struct playback::implementation {
                 }
                 const ma_uint32 _readable = ma_pcm_rb_available_read(&_buffer);
                 if (_play_requested.load(std::memory_order_acquire)) {
-                    _state.store(
-                        _readable == 0 ? playback_state::finished : playback_state::playing,
-                        std::memory_order_release);
+                    _state.store(_readable == 0 ? playback_state::finished : playback_state::playing, std::memory_order_release);
                 }
                 return;
             }
@@ -347,8 +320,6 @@ struct playback::implementation {
         }
         _decoder_initialized = true;
 
-        // Finding the length of some formats decodes the entire stream. Avoid
-        // doing that here so opening a future peer source remains progressive.
         _duration_frames.store(0, std::memory_order_relaxed);
         _consumed_frames.store(0, std::memory_order_relaxed);
         _bass_filter = 0.0f;

@@ -35,8 +35,7 @@ namespace {
 
     bool _scan_settings_changed(const configuration& config)
     {
-        return config.library_path.u8string() != _dialog._library_path
-            || config.scan_subdirectories != _dialog._scan_subdirectories;
+        return config.library_path.u8string() != _dialog._library_path || config.scan_subdirectories != _dialog._scan_subdirectories;
     }
 
     bool _save_config(context& ctx, const configuration& config, bool rescan)
@@ -74,11 +73,7 @@ namespace {
 
         char _text[32] { };
         if (_unit == 0) {
-            std::snprintf(
-                _text,
-                sizeof(_text),
-                "%llu B",
-                static_cast<unsigned long long>(bytes));
+            std::snprintf(_text, sizeof(_text), "%llu B", static_cast<unsigned long long>(bytes));
         } else {
             std::snprintf(_text, sizeof(_text), "%.1f %s", _value, _units[_unit]);
         }
@@ -103,9 +98,7 @@ namespace {
         if (_scan_running) {
             animation_activity_indicator(
                 ImGui::GetID("##ScanActivity"),
-                ImVec2(
-                    _button_position.x + button_width - ImGui::GetFrameHeight() * 0.55f,
-                    _button_position.y + ImGui::GetFrameHeight() * 0.5f),
+                ImVec2(_button_position.x + button_width - ImGui::GetFrameHeight() * 0.55f, _button_position.y + ImGui::GetFrameHeight() * 0.5f),
                 5.0f,
                 ImGui::GetColorU32(ImGuiCol_TextDisabled));
         }
@@ -137,56 +130,26 @@ void draw_settings(context& ctx)
 
     const bool _popup_open = ImGui::IsPopupOpen("Settings");
     const ImGuiID _dialog_motion_owner = ImGui::GetID("##SettingsDialogMotion");
-    const float _dialog_reveal = animation_tween(
-        _dialog_motion_owner,
-        0x32001u,
-        _popup_open && !_dialog._closing ? 1.0f : 0.0f,
-        animation_normal,
-        iam_ease_out_cubic);
+    const float _dialog_reveal = animation_tween(_dialog_motion_owner, 0x32001u, _popup_open && !_dialog._closing ? 1.0f : 0.0f, animation_normal, iam_ease_out_cubic);
     const float _dialog_scale = 0.97f + 0.03f * _dialog_reveal;
     ImGui::SetNextWindowSize(ImVec2(560.0f * _dialog_scale, 0.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowPos(
-        ImVec2(
-            ImGui::GetMainViewport()->GetCenter().x,
-            ImGui::GetMainViewport()->GetCenter().y + (1.0f - _dialog_reveal) * 10.0f),
-        ImGuiCond_Always,
-        ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowBgAlpha(
-        ImGui::GetStyleColorVec4(ImGuiCol_PopupBg).w * (0.72f + 0.28f * _dialog_reveal));
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetMainViewport()->GetCenter().x, ImGui::GetMainViewport()->GetCenter().y + (1.0f - _dialog_reveal) * 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowBgAlpha(ImGui::GetStyleColorVec4(ImGuiCol_PopupBg).w * (0.72f + 0.28f * _dialog_reveal));
     if (!ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
         return;
     }
-    ImGui::PushStyleVar(
-        ImGuiStyleVar_Alpha,
-        ImGui::GetStyle().Alpha * (std::max)(0.02f, _dialog_reveal));
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * (std::max)(0.02f, _dialog_reveal));
 
     ImGui::TextDisabled("Device name");
     ImGui::SetNextItemWidth(ImGui::GetContentRegionAvail().x);
     const ImGuiID _name_error_owner = ImGui::GetID("##DeviceNameError");
-    const float _name_shake = iam_shake(
-        _name_error_owner,
-        7.0f,
-        28.0f,
-        0.38f,
-        ImGui::GetIO().DeltaTime);
+    const float _name_shake = iam_shake(_name_error_owner, 7.0f, 28.0f, 0.38f, ImGui::GetIO().DeltaTime);
     const ImVec2 _name_position = ImGui::GetCursorScreenPos();
     ImGui::SetCursorScreenPos(ImVec2(_name_position.x + _name_shake, _name_position.y));
-    const float _name_error_reveal = animation_tween(
-        _name_error_owner,
-        0x32002u,
-        _dialog._name_error ? 1.0f : 0.0f,
-        animation_quick,
-        iam_ease_out_cubic);
-    const ImVec4 _name_background = iam_get_blended_color(
-        ImGui::GetStyleColorVec4(ImGuiCol_FrameBg),
-        ImVec4(0.42f, 0.12f, 0.12f, 1.0f),
-        _name_error_reveal,
-        iam_col_oklab);
+    const float _name_error_reveal = animation_tween(_name_error_owner, 0x32002u, _dialog._name_error ? 1.0f : 0.0f, animation_quick, iam_ease_out_cubic);
+    const ImVec4 _name_background = iam_get_blended_color(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg), ImVec4(0.42f, 0.12f, 0.12f, 1.0f), _name_error_reveal, iam_col_oklab);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, _name_background);
-    const bool _name_submitted = ImGui::InputText(
-        "###Device name input",
-        &_dialog._instance_name,
-        ImGuiInputTextFlags_EnterReturnsTrue);
+    const bool _name_submitted = ImGui::InputText("###Device name input", &_dialog._instance_name, ImGuiInputTextFlags_EnterReturnsTrue);
     ImGui::PopStyleColor();
     if (ImGui::IsItemEdited()) {
         _dialog._name_error = false;
@@ -209,33 +172,15 @@ void draw_settings(context& ctx)
 
     ImGui::Spacing();
     ImGui::TextDisabled("Music folder");
-    const float _scan_button_width = ImGui::CalcTextSize(_scan_button_label).x
-        + ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float _path_width = (std::max)(1.0f,
-        ImGui::GetContentRegionAvail().x
-            - ImGui::GetStyle().ItemSpacing.x
-            - _scan_button_width);
+    const float _scan_button_width = ImGui::CalcTextSize(_scan_button_label).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float _path_width = (std::max)(1.0f, ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x - _scan_button_width);
     ImGui::SetNextItemWidth(_path_width);
     const ImGuiID _path_error_owner = ImGui::GetID("##MusicPathError");
-    const float _path_shake = iam_shake(
-        _path_error_owner,
-        7.0f,
-        28.0f,
-        0.38f,
-        ImGui::GetIO().DeltaTime);
+    const float _path_shake = iam_shake(_path_error_owner, 7.0f, 28.0f, 0.38f, ImGui::GetIO().DeltaTime);
     const ImVec2 _path_position = ImGui::GetCursorScreenPos();
     ImGui::SetCursorScreenPos(ImVec2(_path_position.x + _path_shake, _path_position.y));
-    const float _path_error_reveal = animation_tween(
-        _path_error_owner,
-        0x32003u,
-        _dialog._path_error ? 1.0f : 0.0f,
-        animation_quick,
-        iam_ease_out_cubic);
-    const ImVec4 _path_background = iam_get_blended_color(
-        ImGui::GetStyleColorVec4(ImGuiCol_FrameBg),
-        ImVec4(0.42f, 0.12f, 0.12f, 1.0f),
-        _path_error_reveal,
-        iam_col_oklab);
+    const float _path_error_reveal = animation_tween(_path_error_owner, 0x32003u, _dialog._path_error ? 1.0f : 0.0f, animation_quick, iam_ease_out_cubic);
+    const ImVec4 _path_background = iam_get_blended_color(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg), ImVec4(0.42f, 0.12f, 0.12f, 1.0f), _path_error_reveal, iam_col_oklab);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, _path_background);
     const bool _path_submitted = ImGui::InputText("###Music folder input", &_dialog._library_path, ImGuiInputTextFlags_EnterReturnsTrue);
     ImGui::PopStyleColor();

@@ -114,10 +114,9 @@ struct offline_service::implementation {
         _store.set_track_offline(value.catalog_id, value.id, false);
 
         const std::vector<track> _remaining = _store.requested_offline_tracks();
-        const std::vector<track>::const_iterator _shared = std::find_if(
-            _remaining.begin(),
-            _remaining.end(),
-            [&value](const track& item) { return item.file_hash == value.file_hash; });
+        const std::vector<track>::const_iterator _shared = std::find_if(_remaining.begin(), _remaining.end(), [&value](const track& item) {
+            return item.file_hash == value.file_hash;
+        });
         if (_shared != _remaining.end()) {
             reconcile();
             return;
@@ -125,8 +124,7 @@ struct offline_service::implementation {
 
         std::lock_guard<std::mutex> _lock(_mutex);
         const std::unordered_map<std::string, _offline_entry>::iterator _entry = _entries.find(value.file_hash);
-        const bool _downloading = _entry != _entries.end()
-            && _entry->second._state == offline_state::downloading;
+        const bool _downloading = _entry != _entries.end() && _entry->second._state == offline_state::downloading;
         if (_entry != _entries.end()) {
             _entry->second._requested = false;
             _entry->second._state = offline_state::off;
@@ -206,8 +204,7 @@ struct offline_service::implementation {
                         break;
                     }
                 }
-                if (_owner == nullptr || _owner->token.empty()
-                    || _owner->fingerprint.empty() || _owner->endpoints.empty()) {
+                if (_owner == nullptr || _owner->token.empty() || _owner->fingerprint.empty() || _owner->endpoints.empty()) {
                     _entries.insert_or_assign(_track.file_hash, _offline_entry { offline_state::failed, 0, _track.size_bytes, 0, true, "The catalog owner is not currently reachable" });
                     continue;
                 }
@@ -250,10 +247,7 @@ struct offline_service::implementation {
             && _entry->second._requested;
     }
 
-    void update_progress(
-        std::string_view hash,
-        std::uint64_t request_id,
-        std::uint64_t downloaded_bytes)
+    void update_progress(std::string_view hash, std::uint64_t request_id, std::uint64_t downloaded_bytes)
     {
         std::lock_guard<std::mutex> _lock(_mutex);
         const std::unordered_map<std::string, _offline_entry>::iterator _entry = _entries.find(std::string(hash));
@@ -300,9 +294,7 @@ struct offline_service::implementation {
     {
         const std::filesystem::path _partial = _store.partial_path(task._track.file_hash);
         std::error_code _filesystem_error;
-        std::uint64_t _offset = std::filesystem::exists(_partial, _filesystem_error)
-            ? std::filesystem::file_size(_partial, _filesystem_error)
-            : 0;
+        std::uint64_t _offset = std::filesystem::exists(_partial, _filesystem_error) ? std::filesystem::file_size(_partial, _filesystem_error) : 0;
         if (_filesystem_error) {
             throw offline_error("Could not inspect partial download: " + _filesystem_error.message());
         }
@@ -317,17 +309,13 @@ struct offline_service::implementation {
 
         peer_client _client(_store, task._peer);
         if (_offset < task._track.size_bytes) {
-            std::ofstream _output(
-                _partial,
-                std::ios::binary | (_offset == 0 ? std::ios::trunc : std::ios::app));
+            std::ofstream _output(_partial, std::ios::binary | (_offset == 0 ? std::ios::trunc : std::ios::app));
             if (!_output) {
                 throw offline_error("Could not open partial download for writing");
             }
 
             std::uint64_t _downloaded_bytes = _offset;
-            peer_response _response = _client.stream_asset(
-                task._track.file_hash,
-                [this, &task, &_output, &_downloaded_bytes](const char* data, std::size_t size) {
+            peer_response _response = _client.stream_asset(task._track.file_hash, [this, &task, &_output, &_downloaded_bytes](const char* data, std::size_t size) {
                     if (!requested(task._track.file_hash, task._request_id)) {
                         return false;
                     }
@@ -337,10 +325,7 @@ struct offline_service::implementation {
                     }
                     _downloaded_bytes += size;
                     update_progress(task._track.file_hash, task._request_id, _downloaded_bytes);
-                    return true;
-                },
-                _offset,
-                task._track.size_bytes - _offset);
+                    return true; }, _offset, task._track.size_bytes - _offset);
             _output.flush();
             if (!_output && requested(task._track.file_hash, task._request_id)) {
                 throw offline_error("Could not write partial download");
@@ -364,12 +349,8 @@ struct offline_service::implementation {
                 || data_fingerprint(_cover_response.body) != task._track.cover_hash) {
                 throw offline_error("Could not download the track cover");
             }
-            const std::vector<unsigned char> _cover_data(
-                _cover_response.body.begin(),
-                _cover_response.body.end());
-            _store.store_cover({ task._track.cover_hash,
-                task._track.cover_content_type,
-                _cover_data });
+            const std::vector<unsigned char> _cover_data(_cover_response.body.begin(), _cover_response.body.end());
+            _store.store_cover({ task._track.cover_hash, task._track.cover_content_type, _cover_data });
         }
 
         bool _remove_cancelled_partial = false;
@@ -386,10 +367,7 @@ struct offline_service::implementation {
                 return;
             } else {
                 if (!_store.find_file(task._track.file_hash)) {
-                    _store.commit_download(
-                        task._track.file_hash,
-                        task._track.extension,
-                        task._track.size_bytes);
+                    _store.commit_download(task._track.file_hash, task._track.extension, task._track.size_bytes);
                 }
                 _entry->second._state = offline_state::on;
                 _entry->second._downloaded_bytes = task._track.size_bytes;
@@ -408,10 +386,9 @@ struct offline_service::implementation {
             _offline_task _task;
             {
                 std::unique_lock<std::mutex> _lock(_mutex);
-                _condition.wait_for(
-                    _lock,
-                    std::chrono::seconds(30),
-                    [this] { return _stop || !_queue.empty(); });
+                _condition.wait_for(_lock, std::chrono::seconds(30), [this] {
+                    return _stop || !_queue.empty();
+                });
                 if (_stop) {
                     return;
                 }

@@ -33,13 +33,13 @@ enum struct audio_extension : std::uint8_t {
 [[nodiscard]] std::string_view audio_content_type(audio_extension extension) noexcept;
 
 struct audio_metadata {
-    std::string title;
-    std::string artist;
-    std::string album;
+    std::string title { };
+    std::string artist { };
+    std::string album { };
     std::uint32_t track_number { 0 };
     std::uint64_t duration_ms { 0 };
-    std::string cover_content_type;
-    std::vector<unsigned char> cover_bytes;
+    std::string cover_content_type { };
+    std::vector<unsigned char> cover_bytes { };
 };
 
 [[nodiscard]] audio_metadata inspect_audio_file(const std::filesystem::path& path, audio_extension extension);
@@ -68,7 +68,7 @@ struct file_audio_source final : audio_source {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 struct stream_audio_source final : audio_source {
@@ -86,7 +86,7 @@ struct stream_audio_source final : audio_source {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 }

@@ -11,8 +11,8 @@
 #include <core/context.hpp>
 #include <widget/animation.hpp>
 #include <widget/friends.hpp>
-#include <widget/tooltip.hpp>
 #include <widget/icons.hpp>
+#include <widget/tooltip.hpp>
 
 namespace soundstep {
 namespace {
@@ -34,9 +34,7 @@ namespace {
 
     std::uint64_t _current_time_ms()
     {
-        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-            std::chrono::system_clock::now().time_since_epoch())
-                .count());
+        return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
     }
 
     std::uint64_t _age_ms(const peer_record& value, std::uint64_t now)
@@ -77,9 +75,7 @@ namespace {
     std::string _endpoint_text(const peer_endpoint& value)
     {
         const std::string _port = std::to_string(value.port);
-        return value.family == peer_endpoint_family::ipv6
-            ? "[" + value.host + "]:" + _port
-            : value.host + ":" + _port;
+        return value.family == peer_endpoint_family::ipv6 ? "[" + value.host + "]:" + _port : value.host + ":" + _port;
     }
 
     const peer_record* _selected_friend(const std::vector<peer_record>& peers)
@@ -129,11 +125,7 @@ namespace {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
             const bool _selected = _dialog._selected_id == _record.id;
-            if (ImGui::Selectable(
-                    _record.name.c_str(),
-                    _selected,
-                    ImGuiSelectableFlags_SpanAllColumns
-                        | ImGuiSelectableFlags_AllowOverlap)) {
+            if (ImGui::Selectable(_record.name.c_str(), _selected, ImGuiSelectableFlags_SpanAllColumns | ImGuiSelectableFlags_AllowOverlap)) {
                 _dialog._selected_id = _record.id;
             }
             if (ImGui::IsItemHovered()) {
@@ -187,14 +179,8 @@ namespace {
 
     void _draw_remove_confirmation(context& ctx)
     {
-        ImGui::SetNextWindowPos(
-            ImGui::GetMainViewport()->GetCenter(),
-            ImGuiCond_Always,
-            ImVec2(0.5f, 0.5f));
-        if (!ImGui::BeginPopupModal(
-                "RemoveFriend",
-                nullptr,
-                ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        if (!ImGui::BeginPopupModal("RemoveFriend", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
             return;
         }
 
@@ -245,33 +231,15 @@ void draw_friends(context& ctx)
 
     const bool _popup_open = ImGui::IsPopupOpen("Friends");
     const ImGuiID _dialog_motion_owner = ImGui::GetID("##FriendsDialogMotion");
-    const float _dialog_reveal = animation_tween(
-        _dialog_motion_owner,
-        0x31001u,
-        _popup_open && !_dialog._closing ? 1.0f : 0.0f,
-        animation_normal,
-        iam_ease_out_cubic);
+    const float _dialog_reveal = animation_tween(_dialog_motion_owner, 0x31001u, _popup_open && !_dialog._closing ? 1.0f : 0.0f, animation_normal, iam_ease_out_cubic);
     const float _dialog_scale = 0.97f + 0.03f * _dialog_reveal;
-    ImGui::SetNextWindowSize(
-        ImVec2(760.0f * _dialog_scale, 0.0f),
-        ImGuiCond_Always);
-    ImGui::SetNextWindowPos(
-        ImVec2(
-            ImGui::GetMainViewport()->GetCenter().x,
-            ImGui::GetMainViewport()->GetCenter().y + (1.0f - _dialog_reveal) * 10.0f),
-        ImGuiCond_Always,
-        ImVec2(0.5f, 0.5f));
-    ImGui::SetNextWindowBgAlpha(
-        ImGui::GetStyleColorVec4(ImGuiCol_PopupBg).w * (0.72f + 0.28f * _dialog_reveal));
-    if (!ImGui::BeginPopupModal(
-            "Friends",
-            nullptr,
-            ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
+    ImGui::SetNextWindowSize(ImVec2(760.0f * _dialog_scale, 0.0f), ImGuiCond_Always);
+    ImGui::SetNextWindowPos(ImVec2(ImGui::GetMainViewport()->GetCenter().x, ImGui::GetMainViewport()->GetCenter().y + (1.0f - _dialog_reveal) * 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    ImGui::SetNextWindowBgAlpha(ImGui::GetStyleColorVec4(ImGuiCol_PopupBg).w * (0.72f + 0.28f * _dialog_reveal));
+    if (!ImGui::BeginPopupModal("Friends", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
         return;
     }
-    ImGui::PushStyleVar(
-        ImGuiStyleVar_Alpha,
-        ImGui::GetStyle().Alpha * (std::max)(0.02f, _dialog_reveal));
+    ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetStyle().Alpha * (std::max)(0.02f, _dialog_reveal));
 
     std::vector<peer_record> _peers = ctx.store.peers();
     if (_selected_friend(_peers) == nullptr) {
@@ -304,17 +272,10 @@ void draw_friends(context& ctx)
     ImGui::TextDisabled("Share this instance");
     ImGui::Spacing();
     if (!_dialog._own_invite.empty()) {
-        const float _copy_button_width = ImGui::CalcTextSize(icons::copy_sharing_code).x
-            + ImGui::GetStyle().FramePadding.x * 2.0f;
-        const float _invite_input_width = (std::max)(1.0f,
-            ImGui::GetContentRegionAvail().x
-                - ImGui::GetStyle().ItemSpacing.x
-                - _copy_button_width);
+        const float _copy_button_width = ImGui::CalcTextSize(icons::copy_sharing_code).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        const float _invite_input_width = (std::max)(1.0f, ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x - _copy_button_width);
         ImGui::SetNextItemWidth(_invite_input_width);
-        ImGui::InputText(
-            "##own_pairing_code",
-            &_dialog._own_invite,
-            ImGuiInputTextFlags_ReadOnly);
+        ImGui::InputText("##own_pairing_code", &_dialog._own_invite, ImGuiInputTextFlags_ReadOnly);
         ImGui::SameLine();
         if (ImGui::Button(icons::copy_sharing_code, ImVec2(_copy_button_width, 0.0f))) {
             ImGui::SetClipboardText(_dialog._own_invite.c_str());
@@ -325,34 +286,15 @@ void draw_friends(context& ctx)
     ImGui::Spacing();
     ImGui::TextDisabled("Add friend");
     ImGui::Spacing();
-    const float _pair_button_width = ImGui::CalcTextSize(icons::pair).x
-        + ImGui::GetStyle().FramePadding.x * 2.0f;
-    const float _pairing_input_width = (std::max)(1.0f,
-        ImGui::GetContentRegionAvail().x
-            - ImGui::GetStyle().ItemSpacing.x
-            - _pair_button_width);
+    const float _pair_button_width = ImGui::CalcTextSize(icons::pair).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+    const float _pairing_input_width = (std::max)(1.0f, ImGui::GetContentRegionAvail().x - ImGui::GetStyle().ItemSpacing.x - _pair_button_width);
     ImGui::SetNextItemWidth(_pairing_input_width);
     const ImGuiID _pairing_error_owner = ImGui::GetID("##PairingCodeError");
-    const float _pairing_shake = iam_shake(
-        _pairing_error_owner,
-        7.0f,
-        28.0f,
-        0.38f,
-        ImGui::GetIO().DeltaTime);
+    const float _pairing_shake = iam_shake(_pairing_error_owner, 7.0f, 28.0f, 0.38f, ImGui::GetIO().DeltaTime);
     const ImVec2 _pairing_position = ImGui::GetCursorScreenPos();
-    ImGui::SetCursorScreenPos(
-        ImVec2(_pairing_position.x + _pairing_shake, _pairing_position.y));
-    const float _pairing_error_reveal = animation_tween(
-        _pairing_error_owner,
-        0x31002u,
-        _dialog._pairing_error ? 1.0f : 0.0f,
-        animation_quick,
-        iam_ease_out_cubic);
-    const ImVec4 _pairing_background = iam_get_blended_color(
-        ImGui::GetStyleColorVec4(ImGuiCol_FrameBg),
-        ImVec4(0.42f, 0.12f, 0.12f, 1.0f),
-        _pairing_error_reveal,
-        iam_col_oklab);
+    ImGui::SetCursorScreenPos(ImVec2(_pairing_position.x + _pairing_shake, _pairing_position.y));
+    const float _pairing_error_reveal = animation_tween(_pairing_error_owner, 0x31002u, _dialog._pairing_error ? 1.0f : 0.0f, animation_quick, iam_ease_out_cubic);
+    const ImVec4 _pairing_background = iam_get_blended_color(ImGui::GetStyleColorVec4(ImGuiCol_FrameBg), ImVec4(0.42f, 0.12f, 0.12f, 1.0f), _pairing_error_reveal, iam_col_oklab);
     ImGui::PushStyleColor(ImGuiCol_FrameBg, _pairing_background);
     ImGui::InputText("##friend_pairing_code", &_dialog._pairing_code);
     ImGui::PopStyleColor();

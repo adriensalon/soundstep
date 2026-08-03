@@ -37,8 +37,7 @@ namespace {
             0xf6a9, 0xf6a9,
             0
         };
-        renderer.merge_font(
-            "font/fluent icons.ttf", 16.0f, ctx.fonts.ui, _icon_ranges);
+        renderer.merge_font("font/fluent icons.ttf", 16.0f, ctx.fonts.ui, _icon_ranges);
         ctx.fonts.brand = renderer.add_font("font/astral delight.ttf", 26.0f);
         ctx.fonts.track_title = renderer.add_font("font/new rodin.otf", 14.0f);
         ctx.fonts.subtitle = renderer.add_font("font/aktiv grotesk.ttf", 16.0f);
@@ -92,23 +91,14 @@ void window::_initialize_native_window()
     };
 
     _state->display = eglGetDisplay(EGL_DEFAULT_DISPLAY);
-    if (_state->display == EGL_NO_DISPLAY
-        || eglInitialize(_state->display, nullptr, nullptr) != EGL_TRUE
-        || eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
+    if (_state->display == EGL_NO_DISPLAY || eglInitialize(_state->display, nullptr, nullptr) != EGL_TRUE || eglBindAPI(EGL_OPENGL_ES_API) != EGL_TRUE) {
         _destroy_native_window();
         throw window_error("Failed to initialize Android EGL");
     }
 
     EGLConfig _config = nullptr;
     EGLint _config_count = 0;
-    if (eglChooseConfig(
-            _state->display,
-            _config_attributes,
-            &_config,
-            1,
-            &_config_count)
-            != EGL_TRUE
-        || _config_count == 0) {
+    if (eglChooseConfig(_state->display, _config_attributes, &_config, 1, &_config_count) != EGL_TRUE || _config_count == 0) {
         _destroy_native_window();
         throw window_error("Android EGL did not provide an OpenGL ES 3 configuration");
     }
@@ -116,18 +106,9 @@ void window::_initialize_native_window()
     EGLint _format = 0;
     eglGetConfigAttrib(_state->display, _config, EGL_NATIVE_VISUAL_ID, &_format);
     ANativeWindow_setBuffersGeometry(_app->window, 0, 0, _format);
-    _state->surface = eglCreateWindowSurface(
-        _state->display, _config, _app->window, nullptr);
-    _state->context = eglCreateContext(
-        _state->display, _config, EGL_NO_CONTEXT, _context_attributes);
-    if (_state->surface == EGL_NO_SURFACE
-        || _state->context == EGL_NO_CONTEXT
-        || eglMakeCurrent(
-               _state->display,
-               _state->surface,
-               _state->surface,
-               _state->context)
-            != EGL_TRUE) {
+    _state->surface = eglCreateWindowSurface(_state->display, _config, _app->window, nullptr);
+    _state->context = eglCreateContext(_state->display, _config, EGL_NO_CONTEXT, _context_attributes);
+    if (_state->surface == EGL_NO_SURFACE || _state->context == EGL_NO_CONTEXT || eglMakeCurrent(_state->display, _state->surface, _state->surface, _state->context) != EGL_TRUE) {
         _destroy_native_window();
         throw window_error("Failed to create the Android EGL surface or context");
     }
@@ -155,8 +136,7 @@ void window::_destroy_native_window() noexcept
     _ctx.fonts = { };
 
     if (_state && _state->display != EGL_NO_DISPLAY) {
-        eglMakeCurrent(
-            _state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        eglMakeCurrent(_state->display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
         if (_state->context != EGL_NO_CONTEXT) {
             eglDestroyContext(_state->display, _state->context);
         }
@@ -198,32 +178,20 @@ void window::run()
         try {
             _window->_handle_app_command(command);
         } catch (const std::exception& exception) {
-            __android_log_print(
-                ANDROID_LOG_ERROR,
-                "soundstep",
-                "Android window error: %s",
-                exception.what());
+            __android_log_print(ANDROID_LOG_ERROR, "soundstep", "Android window error: %s", exception.what());
             ANativeActivity_finish(app->activity);
         }
     };
     _app->onInputEvent = [](android_app* app, AInputEvent* event) -> std::int32_t {
         window* _window = static_cast<window*>(app->userData);
-        return _window != nullptr && _window->_renderer
-            ? ImGui_ImplAndroid_HandleInputEvent(event)
-            : 0;
+        return _window != nullptr && _window->_renderer ? ImGui_ImplAndroid_HandleInputEvent(event) : 0;
     };
 
     while (_app->destroyRequested == 0) {
         int _events = 0;
         android_poll_source* _source = nullptr;
-        const int _timeout = _renderer ? 0 : -1;
         int _identifier = 0;
-        while ((_identifier = ALooper_pollOnce(
-                    _timeout,
-                    nullptr,
-                    &_events,
-                    reinterpret_cast<void**>(&_source)))
-            >= 0) {
+        while ((_identifier = ALooper_pollOnce(_renderer ? 0 : -1, nullptr, &_events, reinterpret_cast<void**>(&_source))) >= 0) {
             if (_source != nullptr) {
                 _source->process(_app, _source);
             }
@@ -284,17 +252,9 @@ namespace {
         int _monitor_height = 0;
         int _window_width = 0;
         int _window_height = 0;
-        glfwGetMonitorWorkarea(
-            _monitor,
-            &_monitor_x,
-            &_monitor_y,
-            &_monitor_width,
-            &_monitor_height);
+        glfwGetMonitorWorkarea(_monitor, &_monitor_x, &_monitor_y, &_monitor_width, &_monitor_height);
         glfwGetWindowSize(window, &_window_width, &_window_height);
-        glfwSetWindowPos(
-            window,
-            _monitor_x + (_monitor_width - _window_width) / 2,
-            _monitor_y + (_monitor_height - _window_height) / 2);
+        glfwSetWindowPos(window, _monitor_x + (_monitor_width - _window_width) / 2, _monitor_y + (_monitor_height - _window_height) / 2);
     }
 
     void _set_window_icon(GLFWwindow* window)
@@ -319,13 +279,7 @@ namespace {
             int _width = 0;
             int _height = 0;
             int _channels = 0;
-            unsigned char* _pixels = stbi_load_from_memory(
-                reinterpret_cast<const unsigned char*>(_data.begin()),
-                static_cast<int>(_data_size),
-                &_width,
-                &_height,
-                &_channels,
-                4);
+            unsigned char* _pixels = stbi_load_from_memory(reinterpret_cast<const unsigned char*>(_data.begin()), static_cast<int>(_data_size), &_width, &_height, &_channels, 4);
             if (_pixels == nullptr || _width <= 0 || _height <= 0) {
                 stbi_image_free(_pixels);
                 return;
@@ -335,7 +289,7 @@ namespace {
             glfwSetWindowIcon(window, 1, &_icon);
             stbi_image_free(_pixels);
         } catch (...) {
-            // A missing icon must not prevent the application from starting.
+            // TODO : a missing icon must not prevent the application from starting
         }
     }
 

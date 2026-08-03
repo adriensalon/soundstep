@@ -158,13 +158,7 @@ struct storage {
     void replace_catalog(const catalog_snapshot& catalog);
     void add_track(const track& track);
     void remove_track(std::string_view catalog_id, std::string_view track_id);
-    void update_track_metadata(
-        std::string_view catalog_id,
-        std::string_view track_id,
-        std::string title,
-        std::string artist,
-        std::string album,
-        std::uint32_t track_number);
+    void update_track_metadata(std::string_view catalog_id, std::string_view track_id, std::string title, std::string artist, std::string album, std::uint32_t track_number);
 
     [[nodiscard]] std::optional<file_location> find_file(std::string_view hash) const;
     [[nodiscard]] std::vector<file_location> managed_files() const;
@@ -184,7 +178,7 @@ struct storage {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 struct library_scanner {
@@ -200,7 +194,7 @@ struct library_scanner {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 }

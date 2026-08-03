@@ -78,44 +78,16 @@ namespace {
         const ImGuiStyle& _style = ImGui::GetStyle();
         const ImGuiID _owner = ImGui::GetID("##OfflineFilterMotion");
         const ImVec2 _position = ImGui::GetCursorScreenPos();
-        const ImVec2 _size(
-            ImGui::CalcTextSize(icons::offline_only).x + _style.FramePadding.x * 2.0f,
-            ImGui::GetFrameHeight());
-        const bool _hovered = ImGui::IsMouseHoveringRect(
-            _position,
-            ImVec2(_position.x + _size.x, _position.y + _size.y));
-        const float _state = animation_tween(
-            _owner,
-            0x11001u,
-            active ? 1.0f : 0.0f,
-            animation_quick,
-            iam_ease_out_cubic);
-        const float _hover = animation_tween(
-            _owner,
-            0x11002u,
-            _hovered ? 1.0f : 0.0f,
-            animation_quick,
-            iam_ease_out_cubic);
-        const ImVec4 _resting = iam_get_blended_color(
-            _style.Colors[ImGuiCol_Button],
-            _style.Colors[ImGuiCol_HeaderActive],
-            _state,
-            iam_col_oklab);
-        const ImVec4 _hovered_color = iam_get_blended_color(
-            _style.Colors[ImGuiCol_ButtonHovered],
-            _style.Colors[ImGuiCol_SliderGrab],
-            _state,
-            iam_col_oklab);
-        const ImVec4 _color = iam_get_blended_color(
-            _resting,
-            _hovered_color,
-            _hover,
-            iam_col_oklab);
+        const ImVec2 _size(ImGui::CalcTextSize(icons::offline_only).x + _style.FramePadding.x * 2.0f, ImGui::GetFrameHeight());
+        const bool _hovered = ImGui::IsMouseHoveringRect(_position, ImVec2(_position.x + _size.x, _position.y + _size.y));
+        const float _state = animation_tween(_owner, 0x11001u, active ? 1.0f : 0.0f, animation_quick, iam_ease_out_cubic);
+        const float _hover = animation_tween(_owner, 0x11002u, _hovered ? 1.0f : 0.0f, animation_quick, iam_ease_out_cubic);
+        const ImVec4 _resting = iam_get_blended_color(_style.Colors[ImGuiCol_Button], _style.Colors[ImGuiCol_HeaderActive], _state, iam_col_oklab);
+        const ImVec4 _hovered_color = iam_get_blended_color(_style.Colors[ImGuiCol_ButtonHovered], _style.Colors[ImGuiCol_SliderGrab], _state, iam_col_oklab);
+        const ImVec4 _color = iam_get_blended_color(_resting, _hovered_color, _hover, iam_col_oklab);
         ImGui::PushStyleColor(ImGuiCol_Button, _color);
         ImGui::PushStyleColor(ImGuiCol_ButtonHovered, _color);
-        ImGui::PushStyleColor(
-            ImGuiCol_ButtonActive,
-            active ? _style.Colors[ImGuiCol_SliderGrabActive] : _style.Colors[ImGuiCol_ButtonActive]);
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, active ? _style.Colors[ImGuiCol_SliderGrabActive] : _style.Colors[ImGuiCol_ButtonActive]);
         if (ImGui::Button(icons::offline_only)) {
             active = !active;
         }
@@ -285,20 +257,15 @@ namespace {
         }) != text.end();
     }
 
-    bool _track_matches_filters(
-        const track& value,
-        const std::unordered_set<std::string>& available_hashes)
+    bool _track_matches_filters(const track& value, const std::unordered_set<std::string>& available_hashes)
     {
-        if (_view._offline_only
-            && available_hashes.find(value.file_hash) == available_hashes.end()) {
+        if (_view._offline_only && available_hashes.find(value.file_hash) == available_hashes.end()) {
             return false;
         }
         return _contains_case_insensitive(_search_text(value), _view._search);
     }
 
-    std::unordered_set<std::string> _available_hashes(
-        context& ctx,
-        std::string_view local_catalog_id)
+    std::unordered_set<std::string> _available_hashes(context& ctx, std::string_view local_catalog_id)
     {
         std::unordered_set<std::string> _hashes;
         if (!_view._offline_only) {
@@ -339,9 +306,7 @@ namespace {
                 _scan.result.files_failed);
             ctx.notify(_message);
         } else if (_scan.state == library_scan_state::failed) {
-            ctx.notify(
-                _scan.error_message.empty() ? "Library scan failed." : _scan.error_message,
-                widget_message_kind::error);
+            ctx.notify(_scan.error_message.empty() ? "Library scan failed." : _scan.error_message, widget_message_kind::error);
         }
     }
 
@@ -481,14 +446,10 @@ namespace {
         if (!ctx.current_track || _view._visible_track_indices.empty()) {
             return nullptr;
         }
-        const std::vector<std::size_t>::const_iterator _current = std::find_if(
-            _view._visible_track_indices.begin(),
-            _view._visible_track_indices.end(),
-            [&ctx](std::size_t index) {
-                const track& _candidate = _view._tracks[index];
-                return _candidate.catalog_id == ctx.current_track->catalog_id
-                    && _candidate.id == ctx.current_track->id;
-            });
+        const std::vector<std::size_t>::const_iterator _current = std::find_if(_view._visible_track_indices.begin(), _view._visible_track_indices.end(), [&ctx](std::size_t index) {
+            const track& _candidate = _view._tracks[index];
+            return _candidate.catalog_id == ctx.current_track->catalog_id && _candidate.id == ctx.current_track->id;
+        });
         if (_current == _view._visible_track_indices.end()) {
             return nullptr;
         }
@@ -499,9 +460,7 @@ namespace {
             return &_view._tracks[*std::prev(_current)];
         }
         const std::vector<std::size_t>::const_iterator _next = std::next(_current);
-        return _next == _view._visible_track_indices.end()
-            ? nullptr
-            : &_view._tracks[*_next];
+        return _next == _view._visible_track_indices.end() ? nullptr : &_view._tracks[*_next];
     }
 
     void _play_adjacent_track(context& ctx, int direction)
@@ -670,24 +629,13 @@ namespace {
         const std::string _duration = _duration_text(value.duration_ms);
         const ImVec2 _duration_size = ImGui::CalcTextSize(_duration.c_str());
         const float _duration_x = _end.x - _track_card_padding - _duration_size.x;
-        const float _download_target = _offline.state == offline_state::downloading
-                && _offline.total_bytes != 0
-            ? static_cast<float>((std::min)(static_cast<double>(_offline.downloaded_bytes)
-                      / static_cast<double>(_offline.total_bytes),
-                  1.0))
-            : 0.0f;
-        const float _download_progress = animation_tween(
-            _motion_owner,
-            0x12001u,
-            _download_target,
-            animation_relaxed,
-            iam_ease_out_cubic);
+        const float _download_target = _offline.state == offline_state::downloading && _offline.total_bytes != 0 ? static_cast<float>((std::min)(static_cast<double>(_offline.downloaded_bytes) / static_cast<double>(_offline.total_bytes), 1.0)) : 0.0f;
+        const float _download_progress = animation_tween(_motion_owner, 0x12001u, _download_target, animation_relaxed, iam_ease_out_cubic);
         const std::string _offline_text = _offline_status_text(_offline, _download_progress);
         const ImVec2 _offline_size = ImGui::CalcTextSize(_offline_text.c_str());
         const bool _downloading = _offline.state == offline_state::downloading;
         const float _offline_indicator_width = _downloading ? 16.0f : 0.0f;
-        const float _offline_x = _duration_x - ImGui::GetStyle().ItemSpacing.x
-            - _offline_size.x - _offline_indicator_width;
+        const float _offline_x = _duration_x - ImGui::GetStyle().ItemSpacing.x - _offline_size.x - _offline_indicator_width;
         const float _right_x = _offline_text.empty() ? _duration_x : _offline_x;
         const bool _selected = _view._selected_catalog_id == value.catalog_id && _view._selected_track_id == value.id;
 
@@ -697,70 +645,31 @@ namespace {
         const bool _hovered = ImGui::IsItemHovered();
         _draw_track_menu(ctx, value, _offline);
 
-        const float _hover = animation_tween(
-            _motion_owner,
-            0x12002u,
-            _hovered ? 1.0f : 0.0f,
-            animation_quick,
-            iam_ease_out_cubic);
-        const float _selection = animation_tween(
-            _motion_owner,
-            0x12003u,
-            _selected ? 1.0f : 0.0f,
-            animation_normal,
-            iam_ease_out_cubic);
+        const float _hover = animation_tween(_motion_owner, 0x12002u, _hovered ? 1.0f : 0.0f, animation_quick, iam_ease_out_cubic);
+        const float _selection = animation_tween(_motion_owner, 0x12003u, _selected ? 1.0f : 0.0f, animation_normal, iam_ease_out_cubic);
 
         ImDrawList* _draw = ImGui::GetWindowDrawList();
         const float _rounding = ImGui::GetStyle().FrameRounding;
         const float _background_alpha = (std::max)(_hover, _selection);
         if (_background_alpha > 0.001f) {
-            const ImVec4 _background = iam_get_blended_color(
-                ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered),
-                ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive),
-                _selection,
-                iam_col_oklab);
-            _draw->AddRectFilled(
-                _position,
-                _end,
-                animation_with_alpha(_background, _background_alpha),
-                _rounding);
+            const ImVec4 _background = iam_get_blended_color(ImGui::GetStyleColorVec4(ImGuiCol_HeaderHovered), ImGui::GetStyleColorVec4(ImGuiCol_HeaderActive), _selection, iam_col_oklab);
+            _draw->AddRectFilled(_position, _end, animation_with_alpha(_background, _background_alpha), _rounding);
         }
         if (_selection > 0.001f) {
-            _draw->AddRect(
-                _position,
-                _end,
-                animation_with_alpha(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), _selection),
-                _rounding,
-                0,
-                1.0f + _selection);
+            _draw->AddRect(_position, _end, animation_with_alpha(ImGui::GetStyleColorVec4(ImGuiCol_CheckMark), _selection), _rounding, 0, 1.0f + _selection);
         }
 
         const float _cover_lift = -1.5f * _hover;
-        const ImVec2 _cover_min(
-            _position.x + _track_card_padding,
-            _position.y + _track_card_padding + _cover_lift);
+        const ImVec2 _cover_min(_position.x + _track_card_padding, _position.y + _track_card_padding + _cover_lift);
         const ImVec2 _cover_max(_cover_min.x + _cover_size, _cover_min.y + _cover_size);
         const std::optional<renderer_texture> _cover = ctx.covers.texture(value);
         if (_cover) {
-            _draw->AddImageRounded(
-                reinterpret_cast<ImTextureID>(_cover->native_id),
-                _cover_min,
-                _cover_max,
-                ImVec2(0.0f, 0.0f),
-                ImVec2(1.0f, 1.0f),
-                IM_COL32_WHITE,
-                _rounding);
+            _draw->AddImageRounded(reinterpret_cast<ImTextureID>(_cover->native_id), _cover_min, _cover_max, ImVec2(0.0f, 0.0f), ImVec2(1.0f, 1.0f), IM_COL32_WHITE, _rounding);
         } else {
             _draw->AddRectFilled(_cover_min, _cover_max, IM_COL32_WHITE, _rounding);
         }
         if (_hover > 0.001f) {
-            _draw->AddRect(
-                _cover_min,
-                _cover_max,
-                animation_with_alpha(ImGui::GetStyleColorVec4(ImGuiCol_Text), _hover * 0.28f),
-                _rounding,
-                0,
-                1.0f);
+            _draw->AddRect(_cover_min, _cover_max, animation_with_alpha(ImGui::GetStyleColorVec4(ImGuiCol_Text), _hover * 0.28f), _rounding, 0, 1.0f);
         }
 
         ImFont* _title_font = ctx.fonts.track_title != nullptr ? ctx.fonts.track_title : ImGui::GetFont();
@@ -786,27 +695,13 @@ namespace {
             ImGui::PushID(static_cast<int>(_offline.state));
             const ImGuiID _status_owner = ImGui::GetID("##OfflineStatusMotion");
             ImGui::PopID();
-            const float _status_alpha = animation_tween(
-                _status_owner,
-                0x12004u,
-                1.0f,
-                animation_normal,
-                iam_ease_out_cubic);
-            const ImVec4 _offline_color = _offline.state == offline_state::failed
-                ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f)
-                : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+            const float _status_alpha = animation_tween(_status_owner, 0x12004u, 1.0f, animation_normal, iam_ease_out_cubic);
+            const ImVec4 _offline_color = _offline.state == offline_state::failed ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f) : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
             const float _status_y = _position.y + (_card_height - _offline_size.y) * 0.5f;
             if (_downloading) {
-                animation_activity_indicator(
-                    _status_owner,
-                    ImVec2(_offline_x + 6.0f, _status_y + _offline_size.y * 0.5f),
-                    5.0f,
-                    animation_with_alpha(_offline_color, _status_alpha));
+                animation_activity_indicator(_status_owner, ImVec2(_offline_x + 6.0f, _status_y + _offline_size.y * 0.5f), 5.0f, animation_with_alpha(_offline_color, _status_alpha));
             }
-            _draw->AddText(
-                ImVec2(_offline_x + _offline_indicator_width, _status_y + (1.0f - _status_alpha) * 3.0f),
-                animation_with_alpha(_offline_color, _status_alpha),
-                _offline_text.c_str());
+            _draw->AddText(ImVec2(_offline_x + _offline_indicator_width, _status_y + (1.0f - _status_alpha) * 3.0f), animation_with_alpha(_offline_color, _status_alpha), _offline_text.c_str());
         }
         ImGui::PopID();
         ImGui::PopID();
@@ -822,27 +717,14 @@ namespace {
         constexpr float _fade_height = 28.0f;
         const ImVec4 _background = _chrome_background();
         const ImU32 _edge = ImGui::ColorConvertFloat4ToU32(_background);
-        const ImU32 _transparent = ImGui::ColorConvertFloat4ToU32(
-            ImVec4(_background.x, _background.y, _background.z, 0.0f));
+        const ImU32 _transparent = ImGui::ColorConvertFloat4ToU32(ImVec4(_background.x, _background.y, _background.z, 0.0f));
         ImDrawList* _draw = ImGui::GetWindowDrawList();
 
         const float _top_end_y = (std::min)(maximum.y, minimum.y + _fade_height);
-        _draw->AddRectFilledMultiColor(
-            minimum,
-            ImVec2(maximum.x, _top_end_y),
-            _edge,
-            _edge,
-            _transparent,
-            _transparent);
+        _draw->AddRectFilledMultiColor(minimum, ImVec2(maximum.x, _top_end_y), _edge, _edge, _transparent, _transparent);
 
         const float _bottom_start_y = (std::max)(minimum.y, maximum.y - _fade_height);
-        _draw->AddRectFilledMultiColor(
-            ImVec2(minimum.x, _bottom_start_y),
-            maximum,
-            _transparent,
-            _transparent,
-            _edge,
-            _edge);
+        _draw->AddRectFilledMultiColor(ImVec2(minimum.x, _bottom_start_y), maximum, _transparent, _transparent, _edge, _edge);
     }
 
     void _draw_track_cards(context& ctx, const std::vector<peer_record>& peers, const std::unordered_set<std::string>& available_hashes)
@@ -963,10 +845,6 @@ void draw_library(context& ctx)
     _refresh_tracks(ctx, _instance, _peers);
     _update_scan_message(ctx);
 
-    // Keep the scrolling cards over the animated background while giving the
-    // controls above them a darker, quieter surface.  Drawing the surface on a
-    // lower channel lets us determine its exact bottom after laying out the
-    // responsive toolbar.
     ImDrawList* _draw = ImGui::GetWindowDrawList();
     const ImVec2 _chrome_min = ImGui::GetWindowPos();
     const float _chrome_right = _chrome_min.x + ImGui::GetWindowSize().x;
@@ -975,15 +853,10 @@ void draw_library(context& ctx)
 
     const float _toolbar_inset = _library_list_horizontal_padding + _track_card_padding;
     const ImVec2 _toolbar_position = ImGui::GetCursorPos();
-    ImGui::SetCursorPos(ImVec2(
-        _toolbar_position.x + _toolbar_inset,
-        _toolbar_position.y + _toolbar_inset + ImGui::GetStyle().WindowPadding.y));
+    ImGui::SetCursorPos(ImVec2(_toolbar_position.x + _toolbar_inset, _toolbar_position.y + _toolbar_inset + ImGui::GetStyle().WindowPadding.y));
     const float _toolbar_start_x = ImGui::GetCursorPosX();
     const float _toolbar_width = ImGui::GetContentRegionAvail().x;
-    const float _toolbar_right_x = _toolbar_start_x + _toolbar_width
-        - _library_list_horizontal_padding
-        - ImGui::GetStyle().ScrollbarSize
-        + _card_right_extension;
+    const float _toolbar_right_x = _toolbar_start_x + _toolbar_width - _library_list_horizontal_padding - ImGui::GetStyle().ScrollbarSize + _card_right_extension;
 
     const std::unordered_set<std::string> _available = _available_hashes(ctx, _instance.id);
     const std::size_t _visible_track_count = static_cast<std::size_t>(std::count_if(_view._tracks.begin(), _view._tracks.end(), [&_available](const track& value) {
@@ -1060,19 +933,12 @@ void draw_library(context& ctx)
     }
     ImGui::PushID(_message_visual._text.c_str());
     const ImGuiID _message_owner = ImGui::GetID("##MessageMotion");
-    const float _message_alpha = animation_tween(
-        _message_owner,
-        0x13001u,
-        _message != nullptr ? 1.0f : 0.0f,
-        animation_normal,
-        iam_ease_out_cubic);
+    const float _message_alpha = animation_tween(_message_owner, 0x13001u, _message != nullptr ? 1.0f : 0.0f, animation_normal, iam_ease_out_cubic);
     ImGui::PopID();
     const ImVec2 _message_position = ImGui::GetCursorScreenPos();
     ImGui::Dummy(ImVec2(0.0f, ImGui::GetTextLineHeight()));
     if (!_message_visual._text.empty() && _message_alpha > 0.001f) {
-        const ImVec4 _message_color = _message_visual._kind == widget_message_kind::error
-            ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f)
-            : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
+        const ImVec4 _message_color = _message_visual._kind == widget_message_kind::error ? ImVec4(1.0f, 0.35f, 0.35f, 1.0f) : ImGui::GetStyleColorVec4(ImGuiCol_TextDisabled);
         const bool _show_activity = _message_visual._kind == widget_message_kind::progress
             && (_message_visual._text.rfind("Scanning", 0) == 0
                 || _message_visual._text.rfind("Refreshing", 0) == 0
@@ -1080,28 +946,14 @@ void draw_library(context& ctx)
                 || _message_visual._text.rfind("Retrying", 0) == 0);
         const float _activity_width = _show_activity ? 16.0f : 0.0f;
         if (_show_activity) {
-            animation_activity_indicator(
-                _message_owner,
-                ImVec2(
-                    _message_position.x + 5.0f,
-                    _message_position.y + ImGui::GetTextLineHeight() * 0.5f),
-                4.5f,
-                animation_with_alpha(_message_color, _message_alpha));
+            animation_activity_indicator(_message_owner, ImVec2(_message_position.x + 5.0f, _message_position.y + ImGui::GetTextLineHeight() * 0.5f), 4.5f, animation_with_alpha(_message_color, _message_alpha));
         }
-        _draw->AddText(
-            ImVec2(
-                _message_position.x + _activity_width,
-                _message_position.y + (1.0f - _message_alpha) * 5.0f),
-            animation_with_alpha(_message_color, _message_alpha),
-            _message_visual._text.c_str());
+        _draw->AddText(ImVec2(_message_position.x + _activity_width, _message_position.y + (1.0f - _message_alpha) * 5.0f), animation_with_alpha(_message_color, _message_alpha), _message_visual._text.c_str());
     }
 
     const float _cards_top = ImGui::GetCursorScreenPos().y;
     _draw->ChannelsSetCurrent(0);
-    _draw->AddRectFilled(
-        _chrome_min,
-        ImVec2(_chrome_right, _cards_top),
-        ImGui::GetColorU32(_chrome_background()));
+    _draw->AddRectFilled(_chrome_min, ImVec2(_chrome_right, _cards_top), ImGui::GetColorU32(_chrome_background()));
     _draw->ChannelsMerge();
 
     _draw_track_cards(ctx, _peers, _available);

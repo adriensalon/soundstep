@@ -105,15 +105,7 @@ std::string data_fingerprint(std::string_view bytes)
     _require_psa(psa_crypto_init(), "Could not initialize transport cryptography");
     std::array<unsigned char, 32> _digest { };
     std::size_t _digest_size = 0;
-    _require_psa(
-        psa_hash_compute(
-            PSA_ALG_SHA_256,
-            reinterpret_cast<const unsigned char*>(bytes.data()),
-            bytes.size(),
-            _digest.data(),
-            _digest.size(),
-            &_digest_size),
-        "Could not fingerprint data");
+    _require_psa(psa_hash_compute(PSA_ALG_SHA_256, reinterpret_cast<const unsigned char*>(bytes.data()), bytes.size(), _digest.data(), _digest.size(), &_digest_size), "Could not fingerprint data");
     if (_digest_size != _digest.size()) {
         throw security_error("Data fingerprint has an invalid size");
     }
@@ -130,22 +122,13 @@ std::string file_fingerprint(const std::filesystem::path& path)
     }
 
     _hash_guard _hash;
-    _require_psa(
-        psa_hash_setup(&_hash._operation, PSA_ALG_SHA_256),
-        "Could not initialize file fingerprint");
+    _require_psa(psa_hash_setup(&_hash._operation, PSA_ALG_SHA_256), "Could not initialize file fingerprint");
     std::array<unsigned char, 64 * 1024> _buffer { };
     while (_input) {
-        _input.read(
-            reinterpret_cast<char*>(_buffer.data()),
-            static_cast<std::streamsize>(_buffer.size()));
+        _input.read(reinterpret_cast<char*>(_buffer.data()), static_cast<std::streamsize>(_buffer.size()));
         const std::streamsize _size = _input.gcount();
         if (_size > 0) {
-            _require_psa(
-                psa_hash_update(
-                    &_hash._operation,
-                    _buffer.data(),
-                    static_cast<std::size_t>(_size)),
-                "Could not fingerprint file data");
+            _require_psa(psa_hash_update(&_hash._operation, _buffer.data(), static_cast<std::size_t>(_size)), "Could not fingerprint file data");
         }
     }
     if (!_input.eof()) {
@@ -154,13 +137,7 @@ std::string file_fingerprint(const std::filesystem::path& path)
 
     std::array<unsigned char, 32> _digest { };
     std::size_t _digest_size = 0;
-    _require_psa(
-        psa_hash_finish(
-            &_hash._operation,
-            _digest.data(),
-            _digest.size(),
-            &_digest_size),
-        "Could not finish file fingerprint");
+    _require_psa(psa_hash_finish(&_hash._operation, _digest.data(), _digest.size(), &_digest_size), "Could not finish file fingerprint");
     if (_digest_size != _digest.size()) {
         throw security_error("File fingerprint has an invalid size");
     }
@@ -172,15 +149,8 @@ std::string transport_certificate_fingerprint(std::string_view certificate)
     _require_psa(psa_crypto_init(), "Could not initialize transport cryptography");
     const std::string _certificate(certificate);
     _certificate_guard _parsed;
-    _require_mbedtls(
-        mbedtls_x509_crt_parse(
-            &_parsed._value,
-            reinterpret_cast<const unsigned char*>(_certificate.c_str()),
-            _certificate.size() + 1),
-        "Could not parse the transport certificate");
-    return data_fingerprint(std::string_view(
-        reinterpret_cast<const char*>(_parsed._value.raw.p),
-        _parsed._value.raw.len));
+    _require_mbedtls(mbedtls_x509_crt_parse(&_parsed._value, reinterpret_cast<const unsigned char*>(_certificate.c_str()), _certificate.size() + 1), "Could not parse the transport certificate");
+    return data_fingerprint(std::string_view(reinterpret_cast<const char*>(_parsed._value.raw.p), _parsed._value.raw.len));
 }
 
 transport_identity create_transport_identity()
@@ -190,71 +160,36 @@ transport_identity create_transport_identity()
     psa_key_attributes_t _attributes = PSA_KEY_ATTRIBUTES_INIT;
     psa_set_key_type(&_attributes, PSA_KEY_TYPE_ECC_KEY_PAIR(PSA_ECC_FAMILY_SECP_R1));
     psa_set_key_bits(&_attributes, 256);
-    psa_set_key_usage_flags(
-        &_attributes,
-        PSA_KEY_USAGE_EXPORT | PSA_KEY_USAGE_SIGN_HASH | PSA_KEY_USAGE_VERIFY_HASH);
+    psa_set_key_usage_flags(&_attributes, PSA_KEY_USAGE_EXPORT | PSA_KEY_USAGE_SIGN_HASH | PSA_KEY_USAGE_VERIFY_HASH);
     psa_set_key_algorithm(&_attributes, PSA_ALG_ECDSA(PSA_ALG_SHA_256));
 
     _key_guard _key;
-    _require_psa(
-        psa_generate_key(&_attributes, &_key._id),
-        "Could not generate the transport private key");
+    _require_psa(psa_generate_key(&_attributes, &_key._id), "Could not generate the transport private key");
     psa_reset_key_attributes(&_attributes);
-    _require_mbedtls(
-        mbedtls_pk_copy_from_psa(_key._id, &_key._value),
-        "Could not export the transport private key");
+    _require_mbedtls(mbedtls_pk_copy_from_psa(_key._id, &_key._value), "Could not export the transport private key");
 
     std::array<unsigned char, 2048> _key_pem { };
-    _require_mbedtls(
-        mbedtls_pk_write_key_pem(&_key._value, _key_pem.data(), _key_pem.size()),
-        "Could not encode the transport private key");
+    _require_mbedtls(mbedtls_pk_write_key_pem(&_key._value, _key_pem.data(), _key_pem.size()), "Could not encode the transport private key");
 
     std::array<unsigned char, 16> _serial { };
-    _require_psa(
-        psa_generate_random(_serial.data(), _serial.size()),
-        "Could not generate the transport certificate serial number");
+    _require_psa(psa_generate_random(_serial.data(), _serial.size()), "Could not generate the transport certificate serial number");
     _serial.front() &= 0x7f;
     _serial.front() |= 0x01;
 
     _certificate_writer_guard _writer;
     mbedtls_x509write_crt_set_subject_key(&_writer._value, &_key._value);
     mbedtls_x509write_crt_set_issuer_key(&_writer._value, &_key._value);
-    _require_mbedtls(
-        mbedtls_x509write_crt_set_subject_name(&_writer._value, "CN=Soundstep"),
-        "Could not set the transport certificate subject");
-    _require_mbedtls(
-        mbedtls_x509write_crt_set_issuer_name(&_writer._value, "CN=Soundstep"),
-        "Could not set the transport certificate issuer");
+    _require_mbedtls(mbedtls_x509write_crt_set_subject_name(&_writer._value, "CN=Soundstep"), "Could not set the transport certificate subject");
+    _require_mbedtls(mbedtls_x509write_crt_set_issuer_name(&_writer._value, "CN=Soundstep"), "Could not set the transport certificate issuer");
     mbedtls_x509write_crt_set_version(&_writer._value, MBEDTLS_X509_CRT_VERSION_3);
     mbedtls_x509write_crt_set_md_alg(&_writer._value, MBEDTLS_MD_SHA256);
-    _require_mbedtls(
-        mbedtls_x509write_crt_set_serial_raw(
-            &_writer._value,
-            _serial.data(),
-            _serial.size()),
-        "Could not set the transport certificate serial number");
-    _require_mbedtls(
-        mbedtls_x509write_crt_set_validity(
-            &_writer._value,
-            "20240101000000",
-            "20491231235959"),
-        "Could not set the transport certificate validity");
-    _require_mbedtls(
-        mbedtls_x509write_crt_set_basic_constraints(&_writer._value, 0, -1),
-        "Could not set the transport certificate constraints");
-    _require_mbedtls(
-        mbedtls_x509write_crt_set_key_usage(
-            &_writer._value,
-            MBEDTLS_X509_KU_DIGITAL_SIGNATURE),
-        "Could not set the transport certificate key usage");
+    _require_mbedtls(mbedtls_x509write_crt_set_serial_raw(&_writer._value, _serial.data(), _serial.size()), "Could not set the transport certificate serial number");
+    _require_mbedtls(mbedtls_x509write_crt_set_validity(&_writer._value, "20240101000000", "20491231235959"), "Could not set the transport certificate validity");
+    _require_mbedtls(mbedtls_x509write_crt_set_basic_constraints(&_writer._value, 0, -1), "Could not set the transport certificate constraints");
+    _require_mbedtls(mbedtls_x509write_crt_set_key_usage(&_writer._value, MBEDTLS_X509_KU_DIGITAL_SIGNATURE), "Could not set the transport certificate key usage");
 
     std::array<unsigned char, 4096> _certificate_pem { };
-    _require_mbedtls(
-        mbedtls_x509write_crt_pem(
-            &_writer._value,
-            _certificate_pem.data(),
-            _certificate_pem.size()),
-        "Could not encode the transport certificate");
+    _require_mbedtls(mbedtls_x509write_crt_pem(&_writer._value, _certificate_pem.data(), _certificate_pem.size()), "Could not encode the transport certificate");
 
     transport_identity _result {
         reinterpret_cast<const char*>(_certificate_pem.data()),

@@ -25,8 +25,8 @@ struct peer_error : std::runtime_error {
 
 struct peer_response {
     int status_code { 0 };
-    std::string body;
-    std::string error_message;
+    std::string body { };
+    std::string error_message { };
 
     [[nodiscard]] bool ok() const noexcept;
     explicit operator bool() const noexcept;
@@ -55,7 +55,7 @@ struct peer_client {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 struct peer_server {
@@ -72,7 +72,7 @@ struct peer_server {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 struct peer_network {
@@ -91,7 +91,7 @@ struct peer_network {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 }

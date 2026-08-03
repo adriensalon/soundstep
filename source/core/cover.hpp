@@ -28,7 +28,7 @@ struct cover_cache {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 }

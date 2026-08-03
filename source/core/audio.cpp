@@ -171,10 +171,7 @@ namespace {
         return (static_cast<std::uint32_t>(data[0] & 0x7f) << 21) | (static_cast<std::uint32_t>(data[1] & 0x7f) << 14) | (static_cast<std::uint32_t>(data[2] & 0x7f) << 7) | (data[3] & 0x7f);
     }
 
-    void _set_cover(
-        audio_metadata& metadata,
-        const unsigned char* data,
-        std::size_t size)
+    void _set_cover(audio_metadata& metadata, const unsigned char* data, std::size_t size)
     {
         if (!metadata.cover_bytes.empty() || size == 0 || size > _maximum_cover_size) {
             return;
@@ -194,10 +191,7 @@ namespace {
         metadata.cover_bytes.assign(data, data + size);
     }
 
-    std::size_t _id3_terminated_size(
-        const unsigned char* data,
-        std::size_t size,
-        unsigned encoding)
+    std::size_t _id3_terminated_size(const unsigned char* data, std::size_t size, unsigned encoding)
     {
         if (encoding == 1 || encoding == 2) {
             for (std::size_t _index = 0; _index + 1 < size; _index += 2) {
@@ -213,11 +207,7 @@ namespace {
             : static_cast<const unsigned char*>(_terminator) - data + 1;
     }
 
-    void _apply_id3_cover(
-        audio_metadata& metadata,
-        std::string_view id,
-        const unsigned char* data,
-        std::size_t size)
+    void _apply_id3_cover(audio_metadata& metadata, std::string_view id, const unsigned char* data, std::size_t size)
     {
         if (!metadata.cover_bytes.empty() || size < 5 || (id != "APIC" && id != "PIC")) {
             return;
@@ -398,10 +388,7 @@ namespace {
         return _result;
     }
 
-    void _parse_flac_picture(
-        audio_metadata& metadata,
-        const unsigned char* data,
-        std::size_t size)
+    void _parse_flac_picture(audio_metadata& metadata, const unsigned char* data, std::size_t size)
     {
         if (!metadata.cover_bytes.empty() || size < 32) {
             return;
@@ -659,30 +646,7 @@ namespace {
         return _metadata;
     }
 
-    std::uint64_t _inspect_duration(const std::filesystem::path& path)
-    {
-        ma_decoder _decoder { };
-        const ma_decoder_config _configuration = ma_decoder_config_init_default();
-#ifdef _WIN32
-        const ma_result _opened = ma_decoder_init_file_w(path.c_str(), &_configuration, &_decoder);
-#else
-        const std::string _file_name = path.u8string();
-        const ma_result _opened = ma_decoder_init_file(_file_name.c_str(), &_configuration, &_decoder);
-#endif
-        if (_opened != MA_SUCCESS) {
-            throw audio_error("Could not decode audio file: " + path.u8string());
-        }
-        ma_uint64 _frames = 0;
-        const ma_result _measured = ma_decoder_get_length_in_pcm_frames(&_decoder, &_frames);
-        const std::uint32_t _sample_rate = _decoder.outputSampleRate;
-        ma_decoder_uninit(&_decoder);
-        if (_measured != MA_SUCCESS) {
-            throw audio_error("Could not determine audio duration: " + path.u8string());
-        }
-        return _duration_milliseconds(_frames, _sample_rate);
-    }
-
-    audio_metadata _inspect_ogg(const std::filesystem::path& path)
+    audio_metadata _inspect_ogg_tags(const std::filesystem::path& path)
     {
 #ifdef _WIN32
         FILE* _file = nullptr;
@@ -717,6 +681,28 @@ namespace {
         return _metadata;
     }
 
+    std::uint64_t _inspect_duration(const std::filesystem::path& path)
+    {
+        ma_decoder _decoder { };
+        const ma_decoder_config _configuration = ma_decoder_config_init_default();
+#ifdef _WIN32
+        const ma_result _opened = ma_decoder_init_file_w(path.c_str(), &_configuration, &_decoder);
+#else
+        const std::string _file_name = path.u8string();
+        const ma_result _opened = ma_decoder_init_file(_file_name.c_str(), &_configuration, &_decoder);
+#endif
+        if (_opened != MA_SUCCESS) {
+            throw audio_error("Could not decode audio file: " + path.u8string());
+        }
+        ma_uint64 _frames = 0;
+        const ma_result _measured = ma_decoder_get_length_in_pcm_frames(&_decoder, &_frames);
+        const std::uint32_t _sample_rate = _decoder.outputSampleRate;
+        ma_decoder_uninit(&_decoder);
+        if (_measured != MA_SUCCESS) {
+            throw audio_error("Could not determine audio duration: " + path.u8string());
+        }
+        return _duration_milliseconds(_frames, _sample_rate);
+    }
 }
 
 std::string_view audio_extension_name(audio_extension extension) noexcept
@@ -784,8 +770,7 @@ std::optional<audio_extension> parse_audio_extension(std::string_view extension)
     return std::nullopt;
 }
 
-std::optional<audio_extension> audio_extension_from_path(
-    const std::filesystem::path& path) noexcept
+std::optional<audio_extension> audio_extension_from_path(const std::filesystem::path& path) noexcept
 {
     try {
         return parse_audio_extension(path.extension().u8string());
@@ -811,9 +796,7 @@ std::string_view audio_content_type(audio_extension extension) noexcept
     return "application/octet-stream";
 }
 
-audio_metadata inspect_audio_file(
-    const std::filesystem::path& path,
-    audio_extension extension)
+audio_metadata inspect_audio_file(const std::filesystem::path& path, audio_extension extension)
 {
     audio_metadata _metadata;
     switch (extension) {
@@ -827,7 +810,7 @@ audio_metadata inspect_audio_file(
         _metadata = _inspect_flac_tags(path);
         break;
     case audio_extension::ogg:
-        _metadata = _inspect_ogg(path);
+        _metadata = _inspect_ogg_tags(path);
         break;
     default:
         throw audio_error("Audio extension is not supported");
@@ -1005,11 +988,7 @@ struct stream_audio_source::implementation {
     mutable std::mutex _mutex;
 };
 
-stream_audio_source::stream_audio_source(
-    std::shared_ptr<peer_client> client,
-    std::string hash,
-    std::uint64_t size,
-    std::size_t read_ahead_size)
+stream_audio_source::stream_audio_source(std::shared_ptr<peer_client> client, std::string hash, std::uint64_t size, std::size_t read_ahead_size)
     : _implementation(std::make_unique<implementation>(
           std::move(client),
           std::move(hash),

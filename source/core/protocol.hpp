@@ -21,17 +21,17 @@ struct protocol_error : std::runtime_error {
 };
 
 struct peer_discovery {
-    instance_info instance;
-    std::vector<peer_endpoint> endpoints;
-    std::string token;
-    std::string fingerprint;
+    instance_info instance { };
+    std::vector<peer_endpoint> endpoints { };
+    std::string token { };
+    std::string fingerprint { };
 };
 
 struct peer_invite {
-    instance_info instance;
-    std::vector<peer_endpoint> endpoints;
-    std::string token;
-    std::string fingerprint;
+    instance_info instance { };
+    std::vector<peer_endpoint> endpoints { };
+    std::string token { };
+    std::string fingerprint { };
 };
 
 [[nodiscard]] std::string protocol_encode_instance(const instance_info& instance);

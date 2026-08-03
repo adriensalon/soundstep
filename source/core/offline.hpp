@@ -28,7 +28,7 @@ struct offline_status {
     std::uint64_t total_bytes { 0 };
     bool can_remove { false };
     bool requested { false };
-    std::string error_message;
+    std::string error_message { };
 };
 
 struct offline_service {
@@ -46,7 +46,7 @@ struct offline_service {
 
 private:
     struct implementation;
-    std::unique_ptr<implementation> _implementation;
+    std::unique_ptr<implementation> _implementation { nullptr };
 };
 
 }

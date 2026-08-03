@@ -15,7 +15,7 @@ namespace {
     constexpr std::uint32_t _message_magic = 0x53535450u; // SSTP
     constexpr std::size_t _maximum_string_size = 1024 * 1024;
 
-    enum class _message_kind : std::uint8_t {
+    enum struct _message_kind : std::uint8_t {
         instance = 1,
         catalog = 2,
         discovery = 3,
@@ -32,7 +32,7 @@ namespace {
             }
         }
 
-        template <class Archive>
+        template <typename Archive>
         void save(Archive& archive) const
         {
             const std::uint32_t _size = static_cast<std::uint32_t>(_value.size());
@@ -42,7 +42,7 @@ namespace {
             }
         }
 
-        template <class Archive>
+        template <typename Archive>
         void load(Archive& archive)
         {
             std::uint32_t _size = 0;
@@ -73,7 +73,7 @@ namespace {
         std::uint64_t _duration_ms { 0 };
         std::uint64_t _size_bytes { 0 };
 
-        template <class Archive>
+        template <typename Archive>
         void serialize(Archive& archive)
         {
             archive(
@@ -99,7 +99,7 @@ namespace {
         _bounded_string _id;
         _bounded_string _name;
 
-        template <class Archive>
+        template <typename Archive>
         void serialize(Archive& archive)
         {
             archive(_magic, _protocol_version, _kind, _id, _name);
@@ -116,7 +116,7 @@ namespace {
         std::uint64_t _revision { 0 };
         std::vector<_wire_track> _tracks;
 
-        template <class Archive>
+        template <typename Archive>
         void save(Archive& archive) const
         {
             if (_tracks.size() > protocol_maximum_track_count) {
@@ -131,7 +131,7 @@ namespace {
             }
         }
 
-        template <class Archive>
+        template <typename Archive>
         void load(Archive& archive)
         {
             archive(_magic, _protocol_version, _kind, _id, _owner_instance_id, _name, _revision);
@@ -152,7 +152,7 @@ namespace {
         std::uint16_t _port { 0 };
         peer_endpoint_family _family { peer_endpoint_family::ipv4 };
 
-        template <class Archive>
+        template <typename Archive>
         void serialize(Archive& archive)
         {
             archive(_host, _port, _family);
@@ -170,7 +170,7 @@ namespace {
         _bounded_string _fingerprint;
         std::vector<_wire_endpoint> _endpoints;
 
-        template <class Archive>
+        template <typename Archive>
         void save(Archive& archive) const
         {
             archive(_magic, _protocol_version, _kind, _id, _name, _token, _fingerprint);
@@ -181,7 +181,7 @@ namespace {
             }
         }
 
-        template <class Archive>
+        template <typename Archive>
         void load(Archive& archive)
         {
             archive(_magic, _protocol_version, _kind, _id, _name, _token, _fingerprint);
@@ -254,11 +254,7 @@ namespace {
         return _decoded;
     }
 
-    void _validate_header(
-        std::uint32_t magic,
-        std::uint32_t version,
-        _message_kind actual_kind,
-        _message_kind expected_kind)
+    void _validate_header(std::uint32_t magic, std::uint32_t version, _message_kind actual_kind, _message_kind expected_kind)
     {
         if (magic != _message_magic) {
             throw protocol_error("Invalid Soundstep protocol message");
@@ -313,10 +309,7 @@ namespace {
             }
         } else {
             _validate_hash(track.cover_hash);
-            if ((track.cover_content_type != "image/jpeg"
-                    && track.cover_content_type != "image/png")
-                || track.cover_size_bytes == 0
-                || track.cover_size_bytes > 8 * 1024 * 1024) {
+            if ((track.cover_content_type != "image/jpeg" && track.cover_content_type != "image/png") || track.cover_size_bytes == 0 || track.cover_size_bytes > 8 * 1024 * 1024) {
                 throw protocol_error("Track cover fields are invalid");
             }
         }
@@ -333,21 +326,18 @@ namespace {
         if (value.port == 0) {
             throw protocol_error("Peer endpoint port cannot be zero");
         }
-        if (value.family != peer_endpoint_family::ipv4
-            && value.family != peer_endpoint_family::ipv6) {
+        if (value.family != peer_endpoint_family::ipv4 && value.family != peer_endpoint_family::ipv6) {
             throw protocol_error("Peer endpoint family is invalid");
         }
     }
 
-    template <class Message>
+    template <typename Message>
     std::string _encode(Message& message)
     {
         try {
             std::ostringstream _output(std::ios::binary | std::ios::out);
             {
-                cereal::PortableBinaryOutputArchive _archive(
-                    _output,
-                    cereal::PortableBinaryOutputArchive::Options::LittleEndian());
+                cereal::PortableBinaryOutputArchive _archive(_output, cereal::PortableBinaryOutputArchive::Options::LittleEndian());
                 _archive(message);
             }
             std::string _bytes = _output.str();
@@ -362,7 +352,7 @@ namespace {
         }
     }
 
-    template <class Message>
+    template <typename Message>
     Message _decode(std::string_view bytes)
     {
         if (bytes.empty()) {
@@ -373,9 +363,7 @@ namespace {
         }
 
         try {
-            std::istringstream _input(
-                std::string(bytes),
-                std::ios::binary | std::ios::in);
+            std::istringstream _input(std::string(bytes), std::ios::binary | std::ios::in);
             Message _message;
             {
                 cereal::PortableBinaryInputArchive _archive(_input);
@@ -503,11 +491,7 @@ std::string protocol_encode_instance(const instance_info& instance)
 instance_info protocol_decode_instance(std::string_view bytes)
 {
     const _instance_message _message = _decode<_instance_message>(bytes);
-    _validate_header(
-        _message._magic,
-        _message._protocol_version,
-        _message._kind,
-        _message_kind::instance);
+    _validate_header(_message._magic, _message._protocol_version, _message._kind, _message_kind::instance);
     if (_message._id._value.empty() || _message._name._value.empty()) {
         throw protocol_error("Instance message contains empty identity fields");
     }
@@ -547,11 +531,7 @@ std::string protocol_encode_catalog(const catalog_snapshot& catalog)
 catalog_snapshot protocol_decode_catalog(std::string_view bytes)
 {
     const _catalog_message _message = _decode<_catalog_message>(bytes);
-    _validate_header(
-        _message._magic,
-        _message._protocol_version,
-        _message._kind,
-        _message_kind::catalog);
+    _validate_header(_message._magic, _message._protocol_version, _message._kind, _message_kind::catalog);
     if (_message._id._value.empty() || _message._owner_instance_id._value.empty() || _message._name._value.empty()) {
         throw protocol_error("Catalog message contains empty identity fields");
     }
@@ -590,11 +570,7 @@ std::string protocol_encode_discovery(const peer_discovery& discovery)
 peer_discovery protocol_decode_discovery(std::string_view bytes)
 {
     const _discovery_message _message = _decode<_discovery_message>(bytes);
-    _validate_header(
-        _message._magic,
-        _message._protocol_version,
-        _message._kind,
-        _message_kind::discovery);
+    _validate_header(_message._magic, _message._protocol_version, _message._kind, _message_kind::discovery);
     if (_message._id._value.empty() || _message._name._value.empty() || _message._token._value.empty()) {
         throw protocol_error("Discovery message contains invalid fields");
     }

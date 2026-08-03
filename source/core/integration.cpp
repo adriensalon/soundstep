@@ -22,9 +22,10 @@
 namespace soundstep {
 namespace {
 
-    namespace media = winrt::Windows::Media;
+    namespace _media = winrt::Windows::Media;
+    namespace _foundation = winrt::Windows::Foundation;
 
-    enum struct transport_request_kind {
+    enum struct _transport_request_kind {
         play,
         pause,
         stop,
@@ -33,34 +34,33 @@ namespace {
         seek
     };
 
-    struct transport_request {
-        transport_request_kind kind;
+    struct _transport_request {
+        _transport_request_kind kind;
         double position_seconds { 0.0 };
     };
 
-    winrt::Windows::Foundation::TimeSpan _time_span(double seconds)
+    _foundation::TimeSpan _time_span(double seconds)
     {
         const double _safe_seconds = std::isfinite(seconds) ? (std::max)(0.0, seconds) : 0.0;
-        return std::chrono::duration_cast<winrt::Windows::Foundation::TimeSpan>(
-            std::chrono::duration<double>(_safe_seconds));
+        return std::chrono::duration_cast<_foundation::TimeSpan>(std::chrono::duration<double>(_safe_seconds));
     }
 
-    media::MediaPlaybackStatus _media_status(playback_state state)
+    _media::MediaPlaybackStatus _media_status(playback_state state)
     {
         switch (state) {
         case playback_state::buffering:
-            return media::MediaPlaybackStatus::Changing;
+            return _media::MediaPlaybackStatus::Changing;
         case playback_state::playing:
-            return media::MediaPlaybackStatus::Playing;
+            return _media::MediaPlaybackStatus::Playing;
         case playback_state::paused:
-            return media::MediaPlaybackStatus::Paused;
+            return _media::MediaPlaybackStatus::Paused;
         case playback_state::stopped:
         case playback_state::finished:
-            return media::MediaPlaybackStatus::Stopped;
+            return _media::MediaPlaybackStatus::Stopped;
         case playback_state::failed:
-            return media::MediaPlaybackStatus::Closed;
+            return _media::MediaPlaybackStatus::Closed;
         }
-        return media::MediaPlaybackStatus::Closed;
+        return _media::MediaPlaybackStatus::Closed;
     }
 
 }
@@ -90,32 +90,27 @@ struct system_media_transport::implementation {
                 return;
             }
 
-            const auto _interop = winrt::get_activation_factory<
-                media::SystemMediaTransportControls,
-                ISystemMediaTransportControlsInterop>();
-            winrt::check_hresult(_interop->GetForWindow(
-                window,
-                winrt::guid_of<media::SystemMediaTransportControls>(),
-                winrt::put_abi(_controls)));
+            const auto _interop = winrt::get_activation_factory<_media::SystemMediaTransportControls, ISystemMediaTransportControlsInterop>();
+            winrt::check_hresult(_interop->GetForWindow(window, winrt::guid_of<_media::SystemMediaTransportControls>(), winrt::put_abi(_controls)));
 
             _button_token = _controls.ButtonPressed(
-                [this](const media::SystemMediaTransportControls&,
-                    const media::SystemMediaTransportControlsButtonPressedEventArgs& args) {
+                [this](const _media::SystemMediaTransportControls&,
+                    const _media::SystemMediaTransportControlsButtonPressedEventArgs& args) {
                     switch (args.Button()) {
-                    case media::SystemMediaTransportControlsButton::Play:
-                        enqueue({ transport_request_kind::play });
+                    case _media::SystemMediaTransportControlsButton::Play:
+                        enqueue({ _transport_request_kind::play });
                         break;
-                    case media::SystemMediaTransportControlsButton::Pause:
-                        enqueue({ transport_request_kind::pause });
+                    case _media::SystemMediaTransportControlsButton::Pause:
+                        enqueue({ _transport_request_kind::pause });
                         break;
-                    case media::SystemMediaTransportControlsButton::Stop:
-                        enqueue({ transport_request_kind::stop });
+                    case _media::SystemMediaTransportControlsButton::Stop:
+                        enqueue({ _transport_request_kind::stop });
                         break;
-                    case media::SystemMediaTransportControlsButton::Previous:
-                        enqueue({ transport_request_kind::previous });
+                    case _media::SystemMediaTransportControlsButton::Previous:
+                        enqueue({ _transport_request_kind::previous });
                         break;
-                    case media::SystemMediaTransportControlsButton::Next:
-                        enqueue({ transport_request_kind::next });
+                    case _media::SystemMediaTransportControlsButton::Next:
+                        enqueue({ _transport_request_kind::next });
                         break;
                     default:
                         break;
@@ -123,12 +118,9 @@ struct system_media_transport::implementation {
                 });
             _button_handler_registered = true;
 
-            _position_token = _controls.PlaybackPositionChangeRequested(
-                [this](const media::SystemMediaTransportControls&,
-                    const media::PlaybackPositionChangeRequestedEventArgs& args) {
-                    enqueue({ transport_request_kind::seek,
-                        std::chrono::duration<double>(args.RequestedPlaybackPosition()).count() });
-                });
+            _position_token = _controls.PlaybackPositionChangeRequested([this](const _media::SystemMediaTransportControls&, const _media::PlaybackPositionChangeRequestedEventArgs& args) {
+                enqueue({ _transport_request_kind::seek, std::chrono::duration<double>(args.RequestedPlaybackPosition()).count() });
+            });
             _position_handler_registered = true;
 
             _controls.IsPlayEnabled(true);
@@ -166,7 +158,7 @@ struct system_media_transport::implementation {
         }
     }
 
-    void enqueue(transport_request request) noexcept
+    void enqueue(_transport_request request) noexcept
     {
         try {
             std::lock_guard<std::mutex> _lock(_request_mutex);
@@ -177,34 +169,34 @@ struct system_media_transport::implementation {
 
     void apply_requests(context& ctx)
     {
-        std::deque<transport_request> _pending;
+        std::deque<_transport_request> _pending;
         {
             std::lock_guard<std::mutex> _lock(_request_mutex);
             _pending.swap(_requests);
         }
 
-        for (const transport_request& _request : _pending) {
+        for (const _transport_request& _request : _pending) {
             switch (_request.kind) {
-            case transport_request_kind::play:
+            case _transport_request_kind::play:
                 ctx.try_action([&ctx] { ctx.player.play(); });
                 break;
-            case transport_request_kind::pause:
+            case _transport_request_kind::pause:
                 ctx.try_action([&ctx] { ctx.player.pause(); });
                 break;
-            case transport_request_kind::stop:
+            case _transport_request_kind::stop:
                 ctx.try_action([&ctx] { ctx.player.stop(); });
                 break;
-            case transport_request_kind::previous:
+            case _transport_request_kind::previous:
                 if (can_play_previous_track(ctx)) {
                     play_previous_track(ctx);
                 }
                 break;
-            case transport_request_kind::next:
+            case _transport_request_kind::next:
                 if (can_play_next_track(ctx)) {
                     play_next_track(ctx);
                 }
                 break;
-            case transport_request_kind::seek: {
+            case _transport_request_kind::seek: {
                 const playback_status _status = ctx.player.status();
                 if (_status.has_source) {
                     double _position = (std::max)(0.0, _request.position_seconds);
@@ -235,13 +227,12 @@ struct system_media_transport::implementation {
         }
         _metadata_identity = std::move(_identity);
 
-        media::SystemMediaTransportControlsDisplayUpdater _updater = _controls.DisplayUpdater();
+        _media::SystemMediaTransportControlsDisplayUpdater _updater = _controls.DisplayUpdater();
         _updater.ClearAll();
         if (ctx.current_track) {
-            _updater.Type(media::MediaPlaybackType::Music);
-            media::MusicDisplayProperties _properties = _updater.MusicProperties();
-            _properties.Title(winrt::to_hstring(
-                ctx.current_track->title.empty() ? std::string("Unknown") : ctx.current_track->title));
+            _updater.Type(_media::MediaPlaybackType::Music);
+            _media::MusicDisplayProperties _properties = _updater.MusicProperties();
+            _properties.Title(winrt::to_hstring(ctx.current_track->title.empty() ? std::string("Unknown") : ctx.current_track->title));
             _properties.Artist(winrt::to_hstring(ctx.current_track->artist));
             _properties.AlbumArtist(winrt::to_hstring(ctx.current_track->artist));
             _properties.AlbumTitle(winrt::to_hstring(ctx.current_track->album));
@@ -265,7 +256,7 @@ struct system_media_transport::implementation {
             ? (std::clamp)(status.position_seconds, 0.0, _duration)
             : 0.0;
 
-        media::SystemMediaTransportControlsTimelineProperties _timeline;
+        _media::SystemMediaTransportControlsTimelineProperties _timeline;
         _timeline.StartTime(_time_span(0.0));
         _timeline.MinSeekTime(_time_span(0.0));
         _timeline.EndTime(_time_span(_duration));
@@ -286,9 +277,8 @@ struct system_media_transport::implementation {
             const bool _has_source = _status.has_source;
             const bool _can_previous = can_play_previous_track(ctx);
             const bool _can_next = can_play_next_track(ctx);
-            const media::MediaPlaybackStatus _new_status = _media_status(_status.state);
-            const bool _is_active = _status.state == playback_state::playing
-                || _status.state == playback_state::buffering;
+            const _media::MediaPlaybackStatus _new_status = _media_status(_status.state);
+            const bool _is_active = _status.state == playback_state::playing || _status.state == playback_state::buffering;
             const bool _can_stop = _has_source
                 && _status.state != playback_state::stopped
                 && _status.state != playback_state::finished;
@@ -314,7 +304,7 @@ struct system_media_transport::implementation {
         }
     }
 
-    media::SystemMediaTransportControls _controls { nullptr };
+    _media::SystemMediaTransportControls _controls { nullptr };
     winrt::event_token _button_token { };
     winrt::event_token _position_token { };
     bool _button_handler_registered { false };
@@ -322,10 +312,10 @@ struct system_media_transport::implementation {
     bool _apartment_initialized { false };
 
     std::mutex _request_mutex;
-    std::deque<transport_request> _requests;
+    std::deque<_transport_request> _requests;
     std::string _metadata_identity;
     std::chrono::steady_clock::time_point _next_timeline_update { };
-    media::MediaPlaybackStatus _last_status { media::MediaPlaybackStatus::Closed };
+    _media::MediaPlaybackStatus _last_status { _media::MediaPlaybackStatus::Closed };
     bool _last_has_source { false };
     bool _has_last_status { false };
 };

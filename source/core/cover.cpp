@@ -57,13 +57,7 @@ struct cover_cache::implementation {
         int _width = 0;
         int _height = 0;
         int _channels = 0;
-        unsigned char* _pixels = stbi_load_from_memory(
-            _cover->bytes.data(),
-            static_cast<int>(_cover->bytes.size()),
-            &_width,
-            &_height,
-            &_channels,
-            4);
+        unsigned char* _pixels = stbi_load_from_memory(_cover->bytes.data(), static_cast<int>(_cover->bytes.size()), &_width, &_height, &_channels, 4);
         if (_pixels == nullptr || _width <= 0 || _height <= 0) {
             stbi_image_free(_pixels);
             throw cover_error("Could not decode embedded cover image");
@@ -118,9 +112,7 @@ struct cover_cache::implementation {
             || data_fingerprint(_response.body) != track.cover_hash) {
             return false;
         }
-        const std::vector<unsigned char> _data(
-            _response.body.begin(),
-            _response.body.end());
+        const std::vector<unsigned char> _data(_response.body.begin(), _response.body.end());
         _store.store_cover({ track.cover_hash, track.cover_content_type, _data });
         return true;
     }
@@ -146,9 +138,7 @@ struct cover_cache::implementation {
             if (!_fetched) {
                 std::lock_guard<std::mutex> _lock(_mutex);
                 _requested.erase(_value.cover_hash);
-                _retry_after.insert_or_assign(
-                    _value.cover_hash,
-                    std::chrono::steady_clock::now() + std::chrono::seconds(30));
+                _retry_after.insert_or_assign(_value.cover_hash, std::chrono::steady_clock::now() + std::chrono::seconds(30));
             }
         }
     }
