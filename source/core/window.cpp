@@ -3,6 +3,7 @@
 #include <android/log.h>
 #include <android_native_app_glue.h>
 #include <imgui.h>
+#include <jni.h>
 
 #include <backends/imgui_impl_android.h>
 
@@ -18,9 +19,21 @@
 namespace soundstep {
 namespace {
 
+    void _apply_android_content_rect(const android_app& app)
+    {
+        const ARect& _content = app.contentRect;
+        if (_content.right <= _content.left || _content.bottom <= _content.top) {
+            return;
+        }
+
+        ImGuiViewport* _viewport = ImGui::GetMainViewport();
+        _viewport->WorkPos = ImVec2(static_cast<float>(_content.left), static_cast<float>(_content.top));
+        _viewport->WorkSize = ImVec2(static_cast<float>(_content.right - _content.left), static_cast<float>(_content.bottom - _content.top));
+    }
+
     void _load_fonts(context& ctx, renderer& renderer)
     {
-        ctx.fonts.ui = renderer.add_font("font/pp fraktion.otf", 16.0f);
+        ctx.fonts.ui = renderer.add_font("font/pp fraktion.otf", 18.0f);
         static constexpr ImWchar _icon_ranges[] = {
             0xf13d, 0xf13d,
             0xf150, 0xf150,
@@ -39,10 +52,10 @@ namespace {
             0xf6a9, 0xf6a9,
             0
         };
-        renderer.merge_font("font/fluent icons.ttf", 16.0f, ctx.fonts.ui, _icon_ranges);
-        ctx.fonts.brand = renderer.add_font("font/astral delight.ttf", 26.0f);
-        ctx.fonts.track_title = renderer.add_font("font/new rodin.otf", 14.0f);
-        ctx.fonts.subtitle = renderer.add_font("font/aktiv grotesk.ttf", 16.0f);
+        renderer.merge_font("font/fluent icons.ttf", 18.0f, ctx.fonts.ui, _icon_ranges);
+        ctx.fonts.brand = renderer.add_font("font/astral delight.ttf", 28.0f);
+        ctx.fonts.track_title = renderer.add_font("font/new rodin.otf", 16.0f);
+        ctx.fonts.subtitle = renderer.add_font("font/aktiv grotesk.ttf", 18.0f);
         ImGui::GetIO().FontDefault = ctx.fonts.ui;
     }
 
@@ -55,6 +68,8 @@ struct window::implementation {
     void initialize_native_window();
     void destroy_native_window() noexcept;
     void handle_app_command(std::int32_t command);
+    void poll_android_input();
+    void update_soft_keyboard();
     void run();
 
     struct state {
@@ -68,6 +83,12 @@ struct window::implementation {
     android_app* _app { nullptr };
     state _state;
     std::unique_ptr<renderer> _renderer { nullptr };
+    JNIEnv* _java_environment { nullptr };
+    jmethodID _show_soft_input { nullptr };
+    jmethodID _hide_soft_input { nullptr };
+    jmethodID _poll_input_event { nullptr };
+    bool _java_thread_attached { false };
+    bool _soft_keyboard_visible { false };
 };
 
 window::implementation::implementation(context& ctx, android_app* app)
@@ -77,11 +98,41 @@ window::implementation::implementation(context& ctx, android_app* app)
     if (_app == nullptr) {
         throw window_error("Android application state is null");
     }
+
+    JavaVM* _java_vm = _app->activity->vm;
+    const jint _environment_status = _java_vm->GetEnv(reinterpret_cast<void**>(&_java_environment), JNI_VERSION_1_6);
+    if (_environment_status == JNI_EDETACHED) {
+        if (_java_vm->AttachCurrentThread(&_java_environment, nullptr) != JNI_OK) {
+            _java_environment = nullptr;
+            return;
+        }
+        _java_thread_attached = true;
+    } else if (_environment_status != JNI_OK) {
+        _java_environment = nullptr;
+        return;
+    }
+
+    jclass _activity_class = _java_environment->GetObjectClass(_app->activity->clazz);
+    if (_activity_class != nullptr) {
+        _show_soft_input = _java_environment->GetMethodID(_activity_class, "showSoftInput", "()V");
+        _hide_soft_input = _java_environment->GetMethodID(_activity_class, "hideSoftInput", "()V");
+        _poll_input_event = _java_environment->GetMethodID(_activity_class, "pollInputEvent", "()I");
+        _java_environment->DeleteLocalRef(_activity_class);
+    }
+    if (_java_environment->ExceptionCheck()) {
+        _java_environment->ExceptionClear();
+        _show_soft_input = nullptr;
+        _hide_soft_input = nullptr;
+        _poll_input_event = nullptr;
+    }
 }
 
 window::implementation::~implementation()
 {
     destroy_native_window();
+    if (_java_thread_attached) {
+        _app->activity->vm->DetachCurrentThread();
+    }
 }
 
 void window::implementation::initialize_native_window()
@@ -176,9 +227,63 @@ void window::implementation::handle_app_command(std::int32_t command)
     case APP_CMD_DESTROY:
         destroy_native_window();
         break;
+    case APP_CMD_LOST_FOCUS:
+        if (_soft_keyboard_visible && _java_environment != nullptr && _hide_soft_input != nullptr) {
+            _java_environment->CallVoidMethod(_app->activity->clazz, _hide_soft_input);
+            _soft_keyboard_visible = false;
+        }
+        break;
     default:
         break;
     }
+}
+
+void window::implementation::poll_android_input()
+{
+    if (_java_environment == nullptr || _poll_input_event == nullptr) {
+        return;
+    }
+
+    ImGuiIO& _io = ImGui::GetIO();
+    for (;;) {
+        const jint _event = _java_environment->CallIntMethod(_app->activity->clazz, _poll_input_event);
+        if (_java_environment->ExceptionCheck()) {
+            _java_environment->ExceptionClear();
+            return;
+        }
+        if (_event == 0) {
+            return;
+        }
+        if (_event == -1) {
+            _io.AddKeyEvent(ImGuiKey_Backspace, true);
+            _io.AddKeyEvent(ImGuiKey_Backspace, false);
+        } else if (_event == -2) {
+            _io.AddKeyEvent(ImGuiKey_Enter, true);
+            _io.AddKeyEvent(ImGuiKey_Enter, false);
+        } else if (_event > 0) {
+            _io.AddInputCharacter(static_cast<unsigned int>(_event));
+        }
+    }
+}
+
+void window::implementation::update_soft_keyboard()
+{
+    if (_java_environment == nullptr || _show_soft_input == nullptr || _hide_soft_input == nullptr) {
+        return;
+    }
+
+    const bool _keyboard_requested = ImGui::GetIO().WantTextInput;
+    if (_keyboard_requested == _soft_keyboard_visible) {
+        return;
+    }
+    _java_environment->CallVoidMethod(
+        _app->activity->clazz,
+        _keyboard_requested ? _show_soft_input : _hide_soft_input);
+    if (_java_environment->ExceptionCheck()) {
+        _java_environment->ExceptionClear();
+        return;
+    }
+    _soft_keyboard_visible = _keyboard_requested;
 }
 
 void window::implementation::run()
@@ -215,8 +320,11 @@ void window::implementation::run()
         }
 
         if (_renderer && _app->window != nullptr) {
+            poll_android_input();
             _renderer->begin_frame();
+            _apply_android_content_rect(*_app);
             draw_app(_ctx, nullptr);
+            update_soft_keyboard();
             _renderer->render(_ctx.player.status());
             eglSwapBuffers(_state.display, _state.surface);
         }
@@ -237,7 +345,9 @@ void window::run()
 }
 
 }
+
 #else
+
 #include <limits>
 #include <stdexcept>
 

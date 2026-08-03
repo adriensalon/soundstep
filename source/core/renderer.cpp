@@ -573,7 +573,18 @@ void renderer::render(const playback_status& playback)
     glClearColor(0.055f, 0.055f, 0.055f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT);
 
+#ifdef __ANDROID__
+    const ImGuiViewport* _viewport = ImGui::GetMainViewport();
+    const int _background_x = static_cast<int>(_viewport->WorkPos.x);
+    const int _background_width = static_cast<int>(_viewport->WorkSize.x);
+    const int _background_height = static_cast<int>(_viewport->WorkSize.y);
+    const int _background_y = _height - static_cast<int>(_viewport->WorkPos.y + _viewport->WorkSize.y);
+    glViewport(_background_x, _background_y, _background_width, _background_height);
+    _implementation->background->draw(_background_width, _background_height, playback, ImGui::GetIO().DeltaTime);
+    glViewport(0, 0, _width, _height);
+#else
     _implementation->background->draw(_width, _height, playback, ImGui::GetIO().DeltaTime);
+#endif
 
     ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 }

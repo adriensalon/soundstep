@@ -33,6 +33,14 @@ namespace {
     _settings_dialog _dialog;
     constexpr const char* _scan_button_label = "Scan now";
 
+    ImVec2 _main_work_center()
+    {
+        const ImGuiViewport* _viewport = ImGui::GetMainViewport();
+        return ImVec2(
+            _viewport->WorkPos.x + _viewport->WorkSize.x * 0.5f,
+            _viewport->WorkPos.y + _viewport->WorkSize.y * 0.5f);
+    }
+
     bool _scan_settings_changed(const configuration& config)
     {
         return config.library_path.u8string() != _dialog._library_path || config.scan_subdirectories != _dialog._scan_subdirectories;
@@ -133,7 +141,8 @@ void draw_settings(context& ctx)
     const float _dialog_reveal = animation_tween(_dialog_motion_owner, 0x32001u, _popup_open && !_dialog._closing ? 1.0f : 0.0f, animation_normal, iam_ease_out_cubic);
     const float _dialog_scale = 0.97f + 0.03f * _dialog_reveal;
     ImGui::SetNextWindowSize(ImVec2(560.0f * _dialog_scale, 0.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetMainViewport()->GetCenter().x, ImGui::GetMainViewport()->GetCenter().y + (1.0f - _dialog_reveal) * 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    const ImVec2 _dialog_center = _main_work_center();
+    ImGui::SetNextWindowPos(ImVec2(_dialog_center.x, _dialog_center.y + (1.0f - _dialog_reveal) * 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowBgAlpha(ImGui::GetStyleColorVec4(ImGuiCol_PopupBg).w * (0.72f + 0.28f * _dialog_reveal));
     if (!ImGui::BeginPopupModal("Settings", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
         return;

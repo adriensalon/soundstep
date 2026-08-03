@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <cstdio>
 #include <filesystem>
 #include <iterator>
@@ -48,6 +49,12 @@ namespace {
         bool _offline_only { false };
         bool _tracks_dirty { true };
         bool _selection_dirty { true };
+#ifdef __ANDROID__
+        bool _touch_scroll_active { false };
+        bool _touch_scroll_moved { false };
+        float _touch_scroll_start_y { 0.0f };
+        float _touch_scroll_previous_y { 0.0f };
+#endif
     };
 
     _library_view_state _view;
@@ -639,10 +646,19 @@ namespace {
         const float _right_x = _offline_text.empty() ? _duration_x : _offline_x;
         const bool _selected = _view._selected_catalog_id == value.catalog_id && _view._selected_track_id == value.id;
 
-        if (ImGui::InvisibleButton("##TrackCard", ImVec2(_width, _card_height))) {
+        const bool _card_pressed = ImGui::InvisibleButton("##TrackCard", ImVec2(_width, _card_height));
+#ifdef __ANDROID__
+        if (_card_pressed && !_view._touch_scroll_moved) {
+#else
+        if (_card_pressed) {
+#endif
             _play_track(ctx, value, peers);
         }
+#ifdef __ANDROID__
+        constexpr bool _hovered = false;
+#else
         const bool _hovered = ImGui::IsItemHovered();
+#endif
         _draw_track_menu(ctx, value, _offline);
 
         const float _hover = animation_tween(_motion_owner, 0x12002u, _hovered ? 1.0f : 0.0f, animation_quick, iam_ease_out_cubic);
@@ -727,6 +743,49 @@ namespace {
         _draw->AddRectFilledMultiColor(ImVec2(minimum.x, _bottom_start_y), maximum, _transparent, _transparent, _edge, _edge);
     }
 
+#ifdef __ANDROID__
+    void _handle_touch_scroll(ImVec2 minimum, ImVec2 maximum)
+    {
+        ImGuiIO& _io = ImGui::GetIO();
+        if (_io.MouseSource != ImGuiMouseSource_TouchScreen) {
+            _view._touch_scroll_active = false;
+            return;
+        }
+
+        if (ImGui::IsMouseClicked(ImGuiMouseButton_Left)
+            && ImGui::IsMouseHoveringRect(minimum, maximum, false)) {
+            _view._touch_scroll_active = true;
+            _view._touch_scroll_moved = false;
+            _view._touch_scroll_start_y = _io.MousePos.y;
+            _view._touch_scroll_previous_y = _io.MousePos.y;
+        }
+
+        if (!_view._touch_scroll_active) {
+            return;
+        }
+
+        constexpr float _drag_threshold = 8.0f;
+        if (!_view._touch_scroll_moved
+            && std::abs(_io.MousePos.y - _view._touch_scroll_start_y) >= _drag_threshold) {
+            _view._touch_scroll_moved = true;
+        }
+
+        if (_view._touch_scroll_moved) {
+            const float _delta_y = _io.MousePos.y - _view._touch_scroll_previous_y;
+            const float _scroll_y = (std::clamp)(
+                ImGui::GetScrollY() - _delta_y,
+                0.0f,
+                ImGui::GetScrollMaxY());
+            ImGui::SetScrollY(_scroll_y);
+        }
+        _view._touch_scroll_previous_y = _io.MousePos.y;
+
+        if (ImGui::IsMouseReleased(ImGuiMouseButton_Left)) {
+            _view._touch_scroll_active = false;
+        }
+    }
+#endif
+
     void _draw_track_cards(context& ctx, const std::vector<peer_record>& peers, const std::unordered_set<std::string>& available_hashes)
     {
         if (_view._tracks_dirty) {
@@ -756,6 +815,9 @@ namespace {
             ImGui::EndChild();
             return;
         }
+#ifdef __ANDROID__
+        _handle_touch_scroll(_list_min, _list_max);
+#endif
         if (_view._visible_track_indices.empty()) {
             ImGui::TextDisabled(_view._tracks.empty() ? "No tracks in this library" : "No tracks match the current filters");
         }

@@ -48,7 +48,9 @@ def _render_master(size: int = 1024) -> Image.Image:
 
 def _render_adaptive_foreground(size: int) -> Image.Image:
     image = Image.new("RGBA", (size, size), (0, 0, 0, 0))
-    _draw_centered_glyph(image, round(size * 0.52))
+    # Adaptive launchers zoom and mask the 108 dp foreground canvas. Keep the
+    # glyph comfortably inside the 66 dp safe zone after that launcher zoom.
+    _draw_centered_glyph(image, round(size * 0.39))
     return image
 
 

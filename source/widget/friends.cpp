@@ -32,6 +32,14 @@ namespace {
 
     _friends_dialog _dialog;
 
+    ImVec2 _main_work_center()
+    {
+        const ImGuiViewport* _viewport = ImGui::GetMainViewport();
+        return ImVec2(
+            _viewport->WorkPos.x + _viewport->WorkSize.x * 0.5f,
+            _viewport->WorkPos.y + _viewport->WorkSize.y * 0.5f);
+    }
+
     std::uint64_t _current_time_ms()
     {
         return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
@@ -179,7 +187,7 @@ namespace {
 
     void _draw_remove_confirmation(context& ctx)
     {
-        ImGui::SetNextWindowPos(ImGui::GetMainViewport()->GetCenter(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+        ImGui::SetNextWindowPos(_main_work_center(), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
         if (!ImGui::BeginPopupModal("RemoveFriend", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
             return;
         }
@@ -234,7 +242,8 @@ void draw_friends(context& ctx)
     const float _dialog_reveal = animation_tween(_dialog_motion_owner, 0x31001u, _popup_open && !_dialog._closing ? 1.0f : 0.0f, animation_normal, iam_ease_out_cubic);
     const float _dialog_scale = 0.97f + 0.03f * _dialog_reveal;
     ImGui::SetNextWindowSize(ImVec2(760.0f * _dialog_scale, 0.0f), ImGuiCond_Always);
-    ImGui::SetNextWindowPos(ImVec2(ImGui::GetMainViewport()->GetCenter().x, ImGui::GetMainViewport()->GetCenter().y + (1.0f - _dialog_reveal) * 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+    const ImVec2 _dialog_center = _main_work_center();
+    ImGui::SetNextWindowPos(ImVec2(_dialog_center.x, _dialog_center.y + (1.0f - _dialog_reveal) * 10.0f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
     ImGui::SetNextWindowBgAlpha(ImGui::GetStyleColorVec4(ImGuiCol_PopupBg).w * (0.72f + 0.28f * _dialog_reveal));
     if (!ImGui::BeginPopupModal("Friends", nullptr, ImGuiWindowFlags_AlwaysAutoResize | ImGuiWindowFlags_NoMove)) {
         return;
