@@ -10,11 +10,11 @@
 #include <imgui.h>
 
 #include <core/context.hpp>
-#include <widget/animation.hpp>
-#include <widget/icons.hpp>
-#include <widget/library.hpp>
-#include <widget/player.hpp>
-#include <widget/tooltip.hpp>
+#include <view/animation.hpp>
+#include <view/icons.hpp>
+#include <view/library.hpp>
+#include <view/player.hpp>
+#include <view/tooltip.hpp>
 
 namespace soundstep {
 namespace {

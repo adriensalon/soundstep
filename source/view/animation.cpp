@@ -3,7 +3,7 @@
 
 #include <im_anim.h>
 
-#include <widget/animation.hpp>
+#include <view/animation.hpp>
 
 namespace soundstep {
 

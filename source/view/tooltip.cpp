@@ -1,6 +1,6 @@
 #include <imgui.h>
 
-#include <widget/tooltip.hpp>
+#include <view/tooltip.hpp>
 
 namespace soundstep {
 

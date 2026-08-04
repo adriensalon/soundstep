@@ -11,9 +11,9 @@
 
 #include <core/config.hpp>
 #include <core/context.hpp>
-#include <widget/animation.hpp>
-#include <widget/icons.hpp>
-#include <widget/settings.hpp>
+#include <view/animation.hpp>
+#include <view/icons.hpp>
+#include <view/settings.hpp>
 
 namespace soundstep {
 namespace {

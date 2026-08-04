@@ -23,7 +23,7 @@
 #include <winrt/Windows.Storage.Streams.h>
 #include <winrt/base.h>
 
-#include <widget/library.hpp>
+#include <view/library.hpp>
 
 namespace soundstep {
 namespace {

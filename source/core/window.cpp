@@ -13,8 +13,8 @@
 #include <core/context.hpp>
 #include <core/renderer.hpp>
 #include <core/window.hpp>
-#include <widget/app.hpp>
-#include <widget/settings.hpp>
+#include <view/app.hpp>
+#include <view/settings.hpp>
 
 namespace soundstep {
 namespace {
@@ -367,8 +367,8 @@ void window::run()
 #include <core/integration.hpp>
 #include <core/renderer.hpp>
 #include <core/window.hpp>
-#include <widget/app.hpp>
-#include <widget/settings.hpp>
+#include <view/app.hpp>
+#include <view/settings.hpp>
 
 CMRC_DECLARE(soundstep_resource);
 
