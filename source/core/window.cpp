@@ -376,13 +376,13 @@ namespace soundstep {
 namespace {
 
 #ifdef _WIN32
-    constexpr UINT _tray_callback_message = WM_APP + 1;
-    constexpr UINT _tray_exit_command = 0x1001;
-    constexpr UINT _tray_show_command = 0x1002;
-    constexpr wchar_t _tray_window_property[] = L"SoundStep.WindowImplementation";
+    constexpr UINT tray_callback_message = WM_APP + 1;
+    constexpr UINT tray_exit_command = 0x1001;
+    constexpr UINT tray_show_command = 0x1002;
+    constexpr wchar_t tray_window_property[] = L"soundstep.WindowImplementation";
 #endif
 
-    void _center_window(GLFWwindow* window)
+    void center_window(GLFWwindow* window)
     {
         if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
             return;
@@ -404,7 +404,7 @@ namespace {
         glfwSetWindowPos(window, _monitor_x + (_monitor_width - _window_width) / 2, _monitor_y + (_monitor_height - _window_height) / 2);
     }
 
-    void _set_window_icon(GLFWwindow* window)
+    void set_window_icon(GLFWwindow* window)
     {
         if (glfwGetPlatform() == GLFW_PLATFORM_WAYLAND) {
             return;
@@ -472,9 +472,9 @@ struct window::implementation {
 #ifdef _WIN32
 LRESULT CALLBACK window::implementation::window_procedure(HWND native_window, UINT message, WPARAM word_parameter, LPARAM long_parameter)
 {
-    implementation* _self = reinterpret_cast<implementation*>(GetPropW(native_window, _tray_window_property));
+    implementation* _self = reinterpret_cast<implementation*>(GetPropW(native_window, tray_window_property));
     if (_self != nullptr) {
-        if (message == _tray_callback_message) {
+        if (message == tray_callback_message) {
             switch (static_cast<UINT>(long_parameter)) {
             case WM_LBUTTONUP:
             case WM_LBUTTONDBLCLK:
@@ -491,10 +491,10 @@ LRESULT CALLBACK window::implementation::window_procedure(HWND native_window, UI
         }
         if (message == WM_COMMAND) {
             switch (LOWORD(word_parameter)) {
-            case _tray_show_command:
+            case tray_show_command:
                 _self->restore_from_tray();
                 return 0;
-            case _tray_exit_command:
+            case tray_exit_command:
                 _self->_exit_requested = true;
                 glfwSetWindowShouldClose(_self->_window.get(), GLFW_TRUE);
                 return 0;
@@ -509,15 +509,15 @@ LRESULT CALLBACK window::implementation::window_procedure(HWND native_window, UI
 
 void window::implementation::install_tray_icon()
 {
-    if (_native_window == nullptr || SetPropW(_native_window, _tray_window_property, reinterpret_cast<HANDLE>(this)) == FALSE) {
-        throw window_error("Failed to initialize the SoundStep tray icon");
+    if (_native_window == nullptr || SetPropW(_native_window, tray_window_property, reinterpret_cast<HANDLE>(this)) == FALSE) {
+        throw window_error("Failed to initialize the soundstep tray icon");
     }
 
     SetLastError(ERROR_SUCCESS);
     const LONG_PTR _previous = SetWindowLongPtrW(_native_window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(&window_procedure));
     if (_previous == 0 && GetLastError() != ERROR_SUCCESS) {
-        RemovePropW(_native_window, _tray_window_property);
-        throw window_error("Failed to receive SoundStep tray icon events");
+        RemovePropW(_native_window, tray_window_property);
+        throw window_error("Failed to receive soundstep tray icon events");
     }
     _original_window_procedure = reinterpret_cast<WNDPROC>(_previous);
 
@@ -525,16 +525,16 @@ void window::implementation::install_tray_icon()
     _tray_icon.hWnd = _native_window;
     _tray_icon.uID = 1;
     _tray_icon.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
-    _tray_icon.uCallbackMessage = _tray_callback_message;
+    _tray_icon.uCallbackMessage = tray_callback_message;
     _tray_icon.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_SOUNDSTEP_ICON));
     if (_tray_icon.hIcon == nullptr) {
         _tray_icon.hIcon = LoadIconW(nullptr, MAKEINTRESOURCEW(32512));
     }
-    lstrcpynW(_tray_icon.szTip, L"SoundStep", static_cast<int>(std::size(_tray_icon.szTip)));
+    lstrcpynW(_tray_icon.szTip, L"soundstep", static_cast<int>(std::size(_tray_icon.szTip)));
 
     if (Shell_NotifyIconW(NIM_ADD, &_tray_icon) == FALSE) {
         remove_tray_icon();
-        throw window_error("Failed to add the SoundStep tray icon");
+        throw window_error("Failed to add the soundstep tray icon");
     }
     _tray_icon_added = true;
 }
@@ -550,7 +550,7 @@ void window::implementation::remove_tray_icon() noexcept
             SetWindowLongPtrW(_native_window, GWLP_WNDPROC, reinterpret_cast<LONG_PTR>(_original_window_procedure));
             _original_window_procedure = nullptr;
         }
-        RemovePropW(_native_window, _tray_window_property);
+        RemovePropW(_native_window, tray_window_property);
     }
 }
 
@@ -567,10 +567,10 @@ void window::implementation::show_tray_menu()
     if (_menu == nullptr) {
         return;
     }
-    AppendMenuW(_menu, MF_STRING, _tray_show_command, L"Show");
+    AppendMenuW(_menu, MF_STRING, tray_show_command, L"Show");
     AppendMenuW(_menu, MF_SEPARATOR, 0, nullptr);
-    AppendMenuW(_menu, MF_STRING, _tray_exit_command, L"Exit");
-    SetMenuDefaultItem(_menu, _tray_show_command, FALSE);
+    AppendMenuW(_menu, MF_STRING, tray_exit_command, L"Exit");
+    SetMenuDefaultItem(_menu, tray_show_command, FALSE);
 
     POINT _cursor { };
     GetCursorPos(&_cursor);
@@ -594,10 +594,10 @@ window::implementation::implementation(context& ctx)
     glfwWindowHint(GLFW_DECORATED, GLFW_FALSE);
     glfwWindowHint(GLFW_VISIBLE, GLFW_FALSE);
 
-    GLFWwindow* _native_window = glfwCreateWindow(1280, 720, "SoundStep", nullptr, nullptr);
+    GLFWwindow* _native_window = glfwCreateWindow(1280, 720, "soundstep", nullptr, nullptr);
     if (_native_window == nullptr) {
         glfwTerminate();
-        throw window_error("Failed to create the SoundStep window");
+        throw window_error("Failed to create the soundstep window");
     }
 
     _window = std::shared_ptr<GLFWwindow>(_native_window, glfwDestroyWindow);
@@ -609,8 +609,8 @@ window::implementation::implementation(context& ctx)
     });
 #endif
     glfwSetWindowSizeLimits(_native_window, 760, 480, GLFW_DONT_CARE, GLFW_DONT_CARE);
-    _center_window(_native_window);
-    _set_window_icon(_native_window);
+    center_window(_native_window);
+    set_window_icon(_native_window);
     glfwMakeContextCurrent(_native_window);
     glfwSwapInterval(1);
 

@@ -28,12 +28,12 @@
 namespace soundstep {
 namespace {
 
-    namespace _media = winrt::Windows::Media;
-    namespace _foundation = winrt::Windows::Foundation;
-    namespace _storage = winrt::Windows::Storage;
-    namespace _streams = winrt::Windows::Storage::Streams;
+    namespace win_media = winrt::Windows::Media;
+    namespace win_foundation = winrt::Windows::Foundation;
+    namespace win_storage = winrt::Windows::Storage;
+    namespace win_streams = winrt::Windows::Storage::Streams;
 
-    enum struct _transport_request_kind {
+    enum struct transport_request_kind {
         play,
         pause,
         stop,
@@ -43,44 +43,44 @@ namespace {
     };
 
     struct _transport_request {
-        _transport_request_kind kind;
+        transport_request_kind kind;
         double position_seconds { 0.0 };
     };
 
-    _foundation::TimeSpan _time_span(double seconds)
+    [[nodiscard]] win_foundation::TimeSpan time_span(double seconds)
     {
         const double _safe_seconds = std::isfinite(seconds) ? (std::max)(0.0, seconds) : 0.0;
-        return std::chrono::duration_cast<_foundation::TimeSpan>(std::chrono::duration<double>(_safe_seconds));
+        return std::chrono::duration_cast<win_foundation::TimeSpan>(std::chrono::duration<double>(_safe_seconds));
     }
 
-    _media::MediaPlaybackStatus _media_status(playback_state state)
+    [[nodiscard]] win_media::MediaPlaybackStatus media_status(playback_state state)
     {
         switch (state) {
         case playback_state::buffering:
-            return _media::MediaPlaybackStatus::Changing;
+            return win_media::MediaPlaybackStatus::Changing;
         case playback_state::playing:
-            return _media::MediaPlaybackStatus::Playing;
+            return win_media::MediaPlaybackStatus::Playing;
         case playback_state::paused:
-            return _media::MediaPlaybackStatus::Paused;
+            return win_media::MediaPlaybackStatus::Paused;
         case playback_state::stopped:
         case playback_state::finished:
-            return _media::MediaPlaybackStatus::Stopped;
+            return win_media::MediaPlaybackStatus::Stopped;
         case playback_state::failed:
-            return _media::MediaPlaybackStatus::Closed;
+            return win_media::MediaPlaybackStatus::Closed;
         }
-        return _media::MediaPlaybackStatus::Closed;
+        return win_media::MediaPlaybackStatus::Closed;
     }
 
-    struct _cover_thumbnail {
-        _storage::StorageFile file { nullptr };
-        _streams::RandomAccessStreamReference reference { nullptr };
+    struct cover_thumbnail {
+        win_storage::StorageFile file { nullptr };
+        win_streams::RandomAccessStreamReference reference { nullptr };
     };
 
-    _cover_thumbnail _create_cover_thumbnail(const cover_art& cover, std::filesystem::path& directory)
+    [[nodiscard]] cover_thumbnail create_cover_thumbnail(const cover_art& cover, std::filesystem::path& directory)
     {
         if (directory.empty()) {
             directory = std::filesystem::temp_directory_path()
-                / ("SoundStep-" + std::to_string(GetCurrentProcessId()) + "-" + std::to_string(GetTickCount64()));
+                / ("soundstep-" + std::to_string(GetCurrentProcessId()) + "-" + std::to_string(GetTickCount64()));
             std::filesystem::create_directories(directory);
         }
 
@@ -96,9 +96,9 @@ namespace {
             throw std::runtime_error("Could not write the Windows media thumbnail file");
         }
 
-        _cover_thumbnail _result;
-        _result.file = _storage::StorageFile::GetFileFromPathAsync(_path.wstring()).get();
-        _result.reference = _streams::RandomAccessStreamReference::CreateFromFile(_result.file);
+        cover_thumbnail _result;
+        _result.file = win_storage::StorageFile::GetFileFromPathAsync(_path.wstring()).get();
+        _result.reference = win_streams::RandomAccessStreamReference::CreateFromFile(_result.file);
         return _result;
     }
 
@@ -129,27 +129,27 @@ struct system_media_transport::implementation {
                 return;
             }
 
-            const auto _interop = winrt::get_activation_factory<_media::SystemMediaTransportControls, ISystemMediaTransportControlsInterop>();
-            winrt::check_hresult(_interop->GetForWindow(window, winrt::guid_of<_media::SystemMediaTransportControls>(), winrt::put_abi(_controls)));
+            const auto _interop = winrt::get_activation_factory<win_media::SystemMediaTransportControls, ISystemMediaTransportControlsInterop>();
+            winrt::check_hresult(_interop->GetForWindow(window, winrt::guid_of<win_media::SystemMediaTransportControls>(), winrt::put_abi(_controls)));
 
             _button_token = _controls.ButtonPressed(
-                [this](const _media::SystemMediaTransportControls&,
-                    const _media::SystemMediaTransportControlsButtonPressedEventArgs& args) {
+                [this](const win_media::SystemMediaTransportControls&,
+                    const win_media::SystemMediaTransportControlsButtonPressedEventArgs& args) {
                     switch (args.Button()) {
-                    case _media::SystemMediaTransportControlsButton::Play:
-                        enqueue({ _transport_request_kind::play });
+                    case win_media::SystemMediaTransportControlsButton::Play:
+                        enqueue({ transport_request_kind::play });
                         break;
-                    case _media::SystemMediaTransportControlsButton::Pause:
-                        enqueue({ _transport_request_kind::pause });
+                    case win_media::SystemMediaTransportControlsButton::Pause:
+                        enqueue({ transport_request_kind::pause });
                         break;
-                    case _media::SystemMediaTransportControlsButton::Stop:
-                        enqueue({ _transport_request_kind::stop });
+                    case win_media::SystemMediaTransportControlsButton::Stop:
+                        enqueue({ transport_request_kind::stop });
                         break;
-                    case _media::SystemMediaTransportControlsButton::Previous:
-                        enqueue({ _transport_request_kind::previous });
+                    case win_media::SystemMediaTransportControlsButton::Previous:
+                        enqueue({ transport_request_kind::previous });
                         break;
-                    case _media::SystemMediaTransportControlsButton::Next:
-                        enqueue({ _transport_request_kind::next });
+                    case win_media::SystemMediaTransportControlsButton::Next:
+                        enqueue({ transport_request_kind::next });
                         break;
                     default:
                         break;
@@ -157,8 +157,8 @@ struct system_media_transport::implementation {
                 });
             _button_handler_registered = true;
 
-            _position_token = _controls.PlaybackPositionChangeRequested([this](const _media::SystemMediaTransportControls&, const _media::PlaybackPositionChangeRequestedEventArgs& args) {
-                enqueue({ _transport_request_kind::seek, std::chrono::duration<double>(args.RequestedPlaybackPosition()).count() });
+            _position_token = _controls.PlaybackPositionChangeRequested([this](const win_media::SystemMediaTransportControls&, const win_media::PlaybackPositionChangeRequestedEventArgs& args) {
+                enqueue({ transport_request_kind::seek, std::chrono::duration<double>(args.RequestedPlaybackPosition()).count() });
             });
             _position_handler_registered = true;
 
@@ -224,26 +224,26 @@ struct system_media_transport::implementation {
 
         for (const _transport_request& _request : _pending) {
             switch (_request.kind) {
-            case _transport_request_kind::play:
+            case transport_request_kind::play:
                 ctx.try_action([&ctx] { ctx.player.play(); });
                 break;
-            case _transport_request_kind::pause:
+            case transport_request_kind::pause:
                 ctx.try_action([&ctx] { ctx.player.pause(); });
                 break;
-            case _transport_request_kind::stop:
+            case transport_request_kind::stop:
                 ctx.try_action([&ctx] { ctx.player.stop(); });
                 break;
-            case _transport_request_kind::previous:
+            case transport_request_kind::previous:
                 if (can_play_previous_track(ctx)) {
                     play_previous_track(ctx);
                 }
                 break;
-            case _transport_request_kind::next:
+            case transport_request_kind::next:
                 if (can_play_next_track(ctx)) {
                     play_next_track(ctx);
                 }
                 break;
-            case _transport_request_kind::seek: {
+            case transport_request_kind::seek: {
                 const playback_status _status = ctx.player.status();
                 if (_status.has_source) {
                     double _position = (std::max)(0.0, _request.position_seconds);
@@ -287,11 +287,11 @@ struct system_media_transport::implementation {
             _next_thumbnail_update = { };
         }
 
-        _media::SystemMediaTransportControlsDisplayUpdater _updater = _controls.DisplayUpdater();
+        win_media::SystemMediaTransportControlsDisplayUpdater _updater = _controls.DisplayUpdater();
         _updater.ClearAll();
         if (ctx.current_track) {
-            _updater.Type(_media::MediaPlaybackType::Music);
-            _media::MusicDisplayProperties _properties = _updater.MusicProperties();
+            _updater.Type(win_media::MediaPlaybackType::Music);
+            win_media::MusicDisplayProperties _properties = _updater.MusicProperties();
             _properties.Title(winrt::to_hstring(ctx.current_track->title.empty() ? std::string("Unknown") : ctx.current_track->title));
             _properties.Artist(winrt::to_hstring(ctx.current_track->artist));
             _properties.AlbumArtist(winrt::to_hstring(ctx.current_track->artist));
@@ -302,7 +302,7 @@ struct system_media_transport::implementation {
                 try {
                     const std::optional<cover_art> _cover = ctx.store.cover(ctx.current_track->cover_hash);
                     if (_cover) {
-                        _cover_thumbnail _thumbnail = _create_cover_thumbnail(*_cover, _thumbnail_directory);
+                        cover_thumbnail _thumbnail = create_cover_thumbnail(*_cover, _thumbnail_directory);
                         _thumbnail_file = std::move(_thumbnail.file);
                         _thumbnail_reference = std::move(_thumbnail.reference);
                         _updater.Thumbnail(_thumbnail_reference);
@@ -334,12 +334,12 @@ struct system_media_transport::implementation {
             ? (std::clamp)(status.position_seconds, 0.0, _duration)
             : 0.0;
 
-        _media::SystemMediaTransportControlsTimelineProperties _timeline;
-        _timeline.StartTime(_time_span(0.0));
-        _timeline.MinSeekTime(_time_span(0.0));
-        _timeline.EndTime(_time_span(_duration));
-        _timeline.MaxSeekTime(_time_span(_duration));
-        _timeline.Position(_time_span(_position));
+        win_media::SystemMediaTransportControlsTimelineProperties _timeline;
+        _timeline.StartTime(time_span(0.0));
+        _timeline.MinSeekTime(time_span(0.0));
+        _timeline.EndTime(time_span(_duration));
+        _timeline.MaxSeekTime(time_span(_duration));
+        _timeline.Position(time_span(_position));
         _controls.UpdateTimelineProperties(_timeline);
     }
 
@@ -355,7 +355,7 @@ struct system_media_transport::implementation {
             const bool _has_source = _status.has_source;
             const bool _can_previous = can_play_previous_track(ctx);
             const bool _can_next = can_play_next_track(ctx);
-            const _media::MediaPlaybackStatus _new_status = _media_status(_status.state);
+            const win_media::MediaPlaybackStatus _new_status = media_status(_status.state);
             const bool _is_active = _status.state == playback_state::playing || _status.state == playback_state::buffering;
             const bool _can_stop = _has_source
                 && _status.state != playback_state::stopped
@@ -382,7 +382,7 @@ struct system_media_transport::implementation {
         }
     }
 
-    _media::SystemMediaTransportControls _controls { nullptr };
+    win_media::SystemMediaTransportControls _controls { nullptr };
     winrt::event_token _button_token { };
     winrt::event_token _position_token { };
     bool _button_handler_registered { false };
@@ -394,11 +394,11 @@ struct system_media_transport::implementation {
     std::string _metadata_identity;
     std::string _thumbnail_hash;
     std::filesystem::path _thumbnail_directory;
-    _storage::StorageFile _thumbnail_file { nullptr };
-    _streams::RandomAccessStreamReference _thumbnail_reference { nullptr };
+    win_storage::StorageFile _thumbnail_file { nullptr };
+    win_streams::RandomAccessStreamReference _thumbnail_reference { nullptr };
     std::chrono::steady_clock::time_point _next_thumbnail_update { };
     std::chrono::steady_clock::time_point _next_timeline_update { };
-    _media::MediaPlaybackStatus _last_status { _media::MediaPlaybackStatus::Closed };
+    win_media::MediaPlaybackStatus _last_status { win_media::MediaPlaybackStatus::Closed };
     bool _last_has_source { false };
     bool _has_last_status { false };
 };

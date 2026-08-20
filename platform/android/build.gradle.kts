@@ -9,7 +9,7 @@ val androidBuildDir = project.findProperty("androidBuildDir") as String?
 val packageDir = project.findProperty("packageDir") as String?
     ?: error("Gradle property 'packageDir' must be provided")
 val targetName = project.findProperty("targetName") as String? ?: "soundstep"
-val appName = "SoundStep"
+val appName = "soundstep"
 val gamePackage = "com.soundstep.app"
 
 if (androidBuildDir != null) {

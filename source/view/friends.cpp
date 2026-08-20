@@ -40,7 +40,7 @@ namespace {
             _viewport->WorkPos.y + _viewport->WorkSize.y * 0.5f);
     }
 
-    std::uint64_t _current_time_ms()
+    std::uint64_t current_time_ms()
     {
         return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
     }
@@ -127,7 +127,7 @@ namespace {
             ImGui::TextDisabled("No friends yet");
         }
 
-        const std::uint64_t _now = _current_time_ms();
+        const std::uint64_t _now = current_time_ms();
         for (const peer_record& _record : peers) {
             ImGui::PushID(_record.id.c_str());
             ImGui::TableNextRow();

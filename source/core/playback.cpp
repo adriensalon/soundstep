@@ -15,20 +15,20 @@
 namespace soundstep {
 namespace {
 
-    constexpr ma_uint32 _output_sample_rate = 48000;
-    constexpr ma_uint32 _output_channels = 2;
-    constexpr ma_uint32 _buffer_frame_count = _output_sample_rate * 2;
-    constexpr ma_uint32 _prebuffer_frame_count = _output_sample_rate / 4;
-    constexpr ma_uint32 _decode_batch_frame_count = 4096;
+    constexpr ma_uint32 output_sample_rate = 48000;
+    constexpr ma_uint32 output_channels = 2;
+    constexpr ma_uint32 buffer_frame_count = output_sample_rate * 2;
+    constexpr ma_uint32 prebuffer_frame_count = output_sample_rate / 4;
+    constexpr ma_uint32 decode_batch_frame_count = 4096;
 
-    std::string _miniaudio_error(std::string message, ma_result result)
+    [[nodiscard]] std::string miniaudio_error(std::string message, ma_result result)
     {
         message += ": ";
         message += ma_result_description(result);
         return message;
     }
 
-    ma_encoding_format _miniaudio_encoding(audio_extension extension)
+    [[nodiscard]] ma_encoding_format miniaudio_encoding(audio_extension extension)
     {
         switch (extension) {
         case audio_extension::mp3:
@@ -50,16 +50,16 @@ namespace {
 struct playback::implementation {
     implementation()
     {
-        ma_result _result = ma_pcm_rb_init(ma_format_f32, _output_channels, _buffer_frame_count, nullptr, nullptr, &_buffer);
+        ma_result _result = ma_pcm_rb_init(ma_format_f32, output_channels, buffer_frame_count, nullptr, nullptr, &_buffer);
         if (_result != MA_SUCCESS) {
-            throw playback_error(_miniaudio_error("Could not create playback buffer", _result));
+            throw playback_error(miniaudio_error("Could not create playback buffer", _result));
         }
         _buffer_initialized = true;
 
         ma_device_config _configuration = ma_device_config_init(ma_device_type_playback);
         _configuration.playback.format = ma_format_f32;
-        _configuration.playback.channels = _output_channels;
-        _configuration.sampleRate = _output_sample_rate;
+        _configuration.playback.channels = output_channels;
+        _configuration.sampleRate = output_sample_rate;
         _configuration.dataCallback = device_callback;
         _configuration.pUserData = this;
 
@@ -67,7 +67,7 @@ struct playback::implementation {
         if (_result != MA_SUCCESS) {
             ma_pcm_rb_uninit(&_buffer);
             _buffer_initialized = false;
-            throw playback_error(_miniaudio_error("Could not initialize the playback device", _result));
+            throw playback_error(miniaudio_error("Could not initialize the playback device", _result));
         }
         _device_initialized = true;
     }
@@ -151,7 +151,7 @@ struct playback::implementation {
     void read_output(float* output, ma_uint32 frame_count) noexcept
     {
         if (!_play_requested.load(std::memory_order_acquire) || _state.load(std::memory_order_acquire) != playback_state::playing) {
-            std::memset(output, 0, static_cast<std::size_t>(frame_count) * _output_channels * sizeof(float));
+            std::memset(output, 0, static_cast<std::size_t>(frame_count) * output_channels * sizeof(float));
             clear_analysis_levels();
             return;
         }
@@ -167,8 +167,8 @@ struct playback::implementation {
             }
 
             const float* _input = static_cast<const float*>(_source_frames);
-            float* _destination = output + static_cast<std::size_t>(_frames_written) * _output_channels;
-            const std::size_t _sample_count = static_cast<std::size_t>(_frames_to_read) * _output_channels;
+            float* _destination = output + static_cast<std::size_t>(_frames_written) * output_channels;
+            const std::size_t _sample_count = static_cast<std::size_t>(_frames_to_read) * output_channels;
             for (std::size_t _index = 0; _index < _sample_count; ++_index) {
                 _destination[_index] = _input[_index] * _current_volume;
             }
@@ -180,8 +180,8 @@ struct playback::implementation {
         _consumed_frames.fetch_add(_frames_written, std::memory_order_relaxed);
 
         if (_frames_written < frame_count) {
-            float* _remaining = output + static_cast<std::size_t>(_frames_written) * _output_channels;
-            std::memset(_remaining, 0, static_cast<std::size_t>(frame_count - _frames_written) * _output_channels * sizeof(float));
+            float* _remaining = output + static_cast<std::size_t>(_frames_written) * output_channels;
+            std::memset(_remaining, 0, static_cast<std::size_t>(frame_count - _frames_written) * output_channels * sizeof(float));
 
             if (_decoder_finished.load(std::memory_order_acquire) && ma_pcm_rb_available_read(&_buffer) == 0) {
                 _play_requested.store(false, std::memory_order_release);
@@ -210,7 +210,7 @@ struct playback::implementation {
         float _peak = 0.0f;
 
         for (ma_uint32 _frame = 0; _frame < frame_count; ++_frame) {
-            const std::size_t _offset = static_cast<std::size_t>(_frame) * _output_channels;
+            const std::size_t _offset = static_cast<std::size_t>(_frame) * output_channels;
             const float _left = output[_offset];
             const float _right = output[_offset + 1];
             const float _mono = (_left + _right) * 0.5f;
@@ -253,7 +253,7 @@ struct playback::implementation {
                 continue;
             }
 
-            ma_uint32 _requested = (std::min)(_writable, _decode_batch_frame_count);
+            ma_uint32 _requested = (std::min)(_writable, decode_batch_frame_count);
             void* _destination = nullptr;
             const ma_result _acquire_result = ma_pcm_rb_acquire_write(&_buffer, &_requested, &_destination);
             if (_acquire_result != MA_SUCCESS) {
@@ -284,7 +284,7 @@ struct playback::implementation {
                 return;
             }
 
-            if (_play_requested.load(std::memory_order_acquire) && _state.load(std::memory_order_acquire) == playback_state::buffering && ma_pcm_rb_available_read(&_buffer) >= _prebuffer_frame_count) {
+            if (_play_requested.load(std::memory_order_acquire) && _state.load(std::memory_order_acquire) == playback_state::buffering && ma_pcm_rb_available_read(&_buffer) >= prebuffer_frame_count) {
                 _state.store(playback_state::playing, std::memory_order_release);
             }
         }
@@ -310,13 +310,13 @@ struct playback::implementation {
             throw playback_error("Could not seek to the beginning of the audio source");
         }
 
-        ma_decoder_config _configuration = ma_decoder_config_init(ma_format_f32, _output_channels, _output_sample_rate);
-        _configuration.encodingFormat = _miniaudio_encoding(extension);
+        ma_decoder_config _configuration = ma_decoder_config_init(ma_format_f32, output_channels, output_sample_rate);
+        _configuration.encodingFormat = miniaudio_encoding(extension);
         const ma_result _result = ma_decoder_init(decoder_read, decoder_seek, this, &_configuration, &_decoder);
         if (_result != MA_SUCCESS) {
             _source.reset();
             _state.store(playback_state::failed, std::memory_order_release);
-            throw playback_error(_miniaudio_error("Could not decode the audio source", _result));
+            throw playback_error(miniaudio_error("Could not decode the audio source", _result));
         }
         _decoder_initialized = true;
 
@@ -342,7 +342,7 @@ struct playback::implementation {
 
         _play_requested.store(true, std::memory_order_release);
         const ma_uint32 _readable = ma_pcm_rb_available_read(&_buffer);
-        const bool _ready = _readable >= _prebuffer_frame_count || (_decoder_finished.load(std::memory_order_acquire) && _readable != 0);
+        const bool _ready = _readable >= prebuffer_frame_count || (_decoder_finished.load(std::memory_order_acquire) && _readable != 0);
         _state.store(_ready ? playback_state::playing : playback_state::buffering, std::memory_order_release);
 
         if (!_device_started) {
@@ -350,7 +350,7 @@ struct playback::implementation {
             if (_result != MA_SUCCESS) {
                 _play_requested.store(false, std::memory_order_release);
                 _state.store(playback_state::failed, std::memory_order_release);
-                throw playback_error(_miniaudio_error("Could not start playback", _result));
+                throw playback_error(miniaudio_error("Could not start playback", _result));
             }
             _device_started = true;
         }
@@ -390,7 +390,7 @@ struct playback::implementation {
             throw playback_error("Playback position must be a finite, non-negative number");
         }
 
-        const long double _requested_frames = static_cast<long double>(seconds) * _output_sample_rate;
+        const long double _requested_frames = static_cast<long double>(seconds) * output_sample_rate;
         if (_requested_frames > static_cast<long double>((std::numeric_limits<ma_uint64>::max)())) {
             throw playback_error("Playback position is too large");
         }
@@ -422,7 +422,7 @@ struct playback::implementation {
         const ma_result _result = ma_decoder_seek_to_pcm_frame(&_decoder, target);
         if (_result != MA_SUCCESS) {
             _state.store(playback_state::failed, std::memory_order_release);
-            throw playback_error(_miniaudio_error("Could not seek the audio source", _result));
+            throw playback_error(miniaudio_error("Could not seek the audio source", _result));
         }
 
         _consumed_frames.store(target, std::memory_order_relaxed);
@@ -436,7 +436,7 @@ struct playback::implementation {
             if (_start_result != MA_SUCCESS) {
                 _play_requested.store(false, std::memory_order_release);
                 _state.store(playback_state::failed, std::memory_order_release);
-                throw playback_error(_miniaudio_error("Could not resume playback", _start_result));
+                throw playback_error(miniaudio_error("Could not resume playback", _start_result));
             }
             _device_started = true;
         }
@@ -448,9 +448,9 @@ struct playback::implementation {
         playback_status _result;
         _result.state = _state.load(std::memory_order_acquire);
         _result.has_source = _decoder_initialized;
-        _result.position_seconds = static_cast<double>(_consumed_frames.load(std::memory_order_relaxed)) / _output_sample_rate;
-        _result.duration_seconds = static_cast<double>(_duration_frames.load(std::memory_order_relaxed)) / _output_sample_rate;
-        _result.buffered_seconds = static_cast<double>(ma_pcm_rb_available_read(const_cast<ma_pcm_rb*>(&_buffer))) / _output_sample_rate;
+        _result.position_seconds = static_cast<double>(_consumed_frames.load(std::memory_order_relaxed)) / output_sample_rate;
+        _result.duration_seconds = static_cast<double>(_duration_frames.load(std::memory_order_relaxed)) / output_sample_rate;
+        _result.buffered_seconds = static_cast<double>(ma_pcm_rb_available_read(const_cast<ma_pcm_rb*>(&_buffer))) / output_sample_rate;
         if (_result.state == playback_state::playing) {
             _result.rms_level = _rms_level.load(std::memory_order_relaxed);
             _result.peak_level = _peak_level.load(std::memory_order_relaxed);

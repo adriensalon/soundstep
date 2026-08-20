@@ -21,9 +21,9 @@
 namespace soundstep {
 namespace {
 
-    constexpr std::size_t _maximum_cover_size = 8 * 1024 * 1024;
+    constexpr std::size_t maximum_cover_size = 8 * 1024 * 1024;
 
-    bool _is_audio_asset_hash(std::string_view hash)
+    bool is_audio_asset_hash(std::string_view hash)
     {
         if (hash.size() != 64) {
             return false;
@@ -39,7 +39,7 @@ namespace {
         return true;
     }
 
-    void _append_utf8(std::string& output, std::uint32_t codepoint)
+    void append_utf8(std::string& output, std::uint32_t codepoint)
     {
         if (codepoint <= 0x7f) {
             output += static_cast<char>(codepoint);
@@ -58,7 +58,7 @@ namespace {
         }
     }
 
-    std::string _clean_text(std::string value)
+    [[nodiscard]] std::string clean_text(std::string value)
     {
         const std::string::size_type _null = value.find('\0');
         if (_null != std::string::npos) {
@@ -75,24 +75,24 @@ namespace {
         return value;
     }
 
-    std::string _latin1_to_utf8(const unsigned char* data, std::size_t size)
+    [[nodiscard]] std::string latin1_to_utf8(const unsigned char* data, std::size_t size)
     {
         std::string _result;
         _result.reserve(size);
         for (std::size_t _index = 0; _index < size && data[_index] != 0; ++_index) {
-            _append_utf8(_result, data[_index]);
+            append_utf8(_result, data[_index]);
         }
-        return _clean_text(std::move(_result));
+        return clean_text(std::move(_result));
     }
 
-    std::uint16_t _utf16_unit(const unsigned char* value, bool big_endian)
+    [[nodiscard]] std::uint16_t utf16_unit(const unsigned char* value, bool big_endian)
     {
         return static_cast<std::uint16_t>(big_endian
                 ? (static_cast<unsigned>(value[0]) << 8) | value[1]
                 : (static_cast<unsigned>(value[1]) << 8) | value[0]);
     }
 
-    std::string _utf16_to_utf8(const unsigned char* data, std::size_t size, bool big_endian)
+    [[nodiscard]] std::string utf16_to_utf8(const unsigned char* data, std::size_t size, bool big_endian)
     {
         if (size >= 2 && data[0] == 0xff && data[1] == 0xfe) {
             big_endian = false;
@@ -106,42 +106,42 @@ namespace {
 
         std::string _result;
         for (std::size_t _index = 0; _index + 1 < size; _index += 2) {
-            std::uint32_t _codepoint = _utf16_unit(data + _index, big_endian);
+            std::uint32_t _codepoint = utf16_unit(data + _index, big_endian);
             if (_codepoint == 0) {
                 break;
             }
             if (_codepoint >= 0xd800 && _codepoint <= 0xdbff && _index + 3 < size) {
-                const std::uint32_t _low = _utf16_unit(data + _index + 2, big_endian);
+                const std::uint32_t _low = utf16_unit(data + _index + 2, big_endian);
                 if (_low >= 0xdc00 && _low <= 0xdfff) {
                     _codepoint = 0x10000 + ((_codepoint - 0xd800) << 10) + (_low - 0xdc00);
                     _index += 2;
                 }
             }
-            _append_utf8(_result, _codepoint);
+            append_utf8(_result, _codepoint);
         }
-        return _clean_text(std::move(_result));
+        return clean_text(std::move(_result));
     }
 
-    std::string _id3_text(const unsigned char* data, std::size_t size)
+    [[nodiscard]] std::string id3_text(const unsigned char* data, std::size_t size)
     {
         if (size <= 1) {
             return { };
         }
         switch (data[0]) {
         case 0:
-            return _latin1_to_utf8(data + 1, size - 1);
+            return latin1_to_utf8(data + 1, size - 1);
         case 1:
-            return _utf16_to_utf8(data + 1, size - 1, false);
+            return utf16_to_utf8(data + 1, size - 1, false);
         case 2:
-            return _utf16_to_utf8(data + 1, size - 1, true);
+            return utf16_to_utf8(data + 1, size - 1, true);
         case 3:
-            return _clean_text(std::string(reinterpret_cast<const char*>(data + 1), size - 1));
+            return clean_text(std::string(reinterpret_cast<const char*>(data + 1), size - 1));
         default:
             return { };
         }
     }
 
-    std::uint32_t _parse_track_number(std::string_view value)
+    [[nodiscard]] std::uint32_t parse_track_number(std::string_view value)
     {
         std::uint64_t _result = 0;
         bool _found_digit = false;
@@ -161,19 +161,19 @@ namespace {
         return _found_digit ? static_cast<std::uint32_t>(_result) : 0;
     }
 
-    std::uint32_t _big_endian_u32(const unsigned char* data)
+    [[nodiscard]] std::uint32_t big_endian_u32(const unsigned char* data)
     {
         return (static_cast<std::uint32_t>(data[0]) << 24) | (static_cast<std::uint32_t>(data[1]) << 16) | (static_cast<std::uint32_t>(data[2]) << 8) | data[3];
     }
 
-    std::uint32_t _synchsafe_u32(const unsigned char* data)
+    [[nodiscard]] std::uint32_t synchsafe_u32(const unsigned char* data)
     {
         return (static_cast<std::uint32_t>(data[0] & 0x7f) << 21) | (static_cast<std::uint32_t>(data[1] & 0x7f) << 14) | (static_cast<std::uint32_t>(data[2] & 0x7f) << 7) | (data[3] & 0x7f);
     }
 
-    void _set_cover(audio_metadata& metadata, const unsigned char* data, std::size_t size)
+    void set_cover(audio_metadata& metadata, const unsigned char* data, std::size_t size)
     {
-        if (!metadata.cover_bytes.empty() || size == 0 || size > _maximum_cover_size) {
+        if (!metadata.cover_bytes.empty() || size == 0 || size > maximum_cover_size) {
             return;
         }
 
@@ -191,7 +191,7 @@ namespace {
         metadata.cover_bytes.assign(data, data + size);
     }
 
-    std::size_t _id3_terminated_size(const unsigned char* data, std::size_t size, unsigned encoding)
+    [[nodiscard]] std::size_t id3_terminated_size(const unsigned char* data, std::size_t size, unsigned encoding)
     {
         if (encoding == 1 || encoding == 2) {
             for (std::size_t _index = 0; _index + 1 < size; _index += 2) {
@@ -207,7 +207,7 @@ namespace {
             : static_cast<const unsigned char*>(_terminator) - data + 1;
     }
 
-    void _apply_id3_cover(audio_metadata& metadata, std::string_view id, const unsigned char* data, std::size_t size)
+    void apply_id3_cover(audio_metadata& metadata, std::string_view id, const unsigned char* data, std::size_t size)
     {
         if (!metadata.cover_bytes.empty() || size < 5 || (id != "APIC" && id != "PIC")) {
             return;
@@ -231,16 +231,16 @@ namespace {
         if (_cursor >= size) {
             return;
         }
-        _cursor += _id3_terminated_size(data + _cursor, size - _cursor, _encoding);
+        _cursor += id3_terminated_size(data + _cursor, size - _cursor, _encoding);
         if (_cursor < size) {
-            _set_cover(metadata, data + _cursor, size - _cursor);
+            set_cover(metadata, data + _cursor, size - _cursor);
         }
     }
 
-    void _apply_id3_frame(audio_metadata& metadata, std::string_view id, const unsigned char* data, std::size_t size)
+    void apply_id3_frame(audio_metadata& metadata, std::string_view id, const unsigned char* data, std::size_t size)
     {
-        _apply_id3_cover(metadata, id, data, size);
-        const std::string _value = _id3_text(data, size);
+        apply_id3_cover(metadata, id, data, size);
+        const std::string _value = id3_text(data, size);
         if (_value.empty()) {
             return;
         }
@@ -251,11 +251,11 @@ namespace {
         } else if (id == "TALB" || id == "TAL") {
             metadata.album = _value;
         } else if (id == "TRCK" || id == "TRK") {
-            metadata.track_number = _parse_track_number(_value);
+            metadata.track_number = parse_track_number(_value);
         }
     }
 
-    void _parse_id3v2(audio_metadata& metadata, const unsigned char* raw, std::size_t raw_size)
+    void parse_id3v2(audio_metadata& metadata, const unsigned char* raw, std::size_t raw_size)
     {
         if (raw_size < 10 || std::memcmp(raw, "ID3", 3) != 0) {
             return;
@@ -265,7 +265,7 @@ namespace {
             return;
         }
 
-        const std::size_t _declared_size = _synchsafe_u32(raw + 6);
+        const std::size_t _declared_size = synchsafe_u32(raw + 6);
         const std::size_t _body_size = (std::min)(_declared_size, raw_size - 10);
         std::vector<unsigned char> _body(raw + 10, raw + 10 + _body_size);
         if ((raw[5] & 0x80) != 0) {
@@ -283,8 +283,8 @@ namespace {
         std::size_t _cursor = 0;
         if ((raw[5] & 0x40) != 0 && _version >= 3 && _body.size() >= 4) {
             const std::size_t _extended = _version == 4
-                ? _synchsafe_u32(_body.data())
-                : 4 + _big_endian_u32(_body.data());
+                ? synchsafe_u32(_body.data())
+                : 4 + big_endian_u32(_body.data());
             if (_extended > _body.size()) {
                 return;
             }
@@ -304,29 +304,29 @@ namespace {
             const std::size_t _frame_size = _version == 2
                 ? (static_cast<std::size_t>(_body[_cursor + 3]) << 16) | (static_cast<std::size_t>(_body[_cursor + 4]) << 8) | _body[_cursor + 5]
                 : _version == 4
-                ? _synchsafe_u32(_body.data() + _cursor + 4)
-                : _big_endian_u32(_body.data() + _cursor + 4);
+                ? synchsafe_u32(_body.data() + _cursor + 4)
+                : big_endian_u32(_body.data() + _cursor + 4);
             _cursor += _header_size;
             if (_frame_size == 0 || _frame_size > _body.size() - _cursor) {
                 break;
             }
 
-            _apply_id3_frame(metadata, _id, _body.data() + _cursor, _frame_size);
+            apply_id3_frame(metadata, _id, _body.data() + _cursor, _frame_size);
             _cursor += _frame_size;
         }
     }
 
-    void _parse_id3v1(audio_metadata& metadata, const unsigned char* raw, std::size_t raw_size)
+    void parse_id3v1(audio_metadata& metadata, const unsigned char* raw, std::size_t raw_size)
     {
         if (raw_size < 128 || std::memcmp(raw, "TAG", 3) != 0) {
             return;
         }
-        metadata.title = _latin1_to_utf8(raw + 3, 30);
-        metadata.artist = _latin1_to_utf8(raw + 33, 30);
-        metadata.album = _latin1_to_utf8(raw + 63, 30);
+        metadata.title = latin1_to_utf8(raw + 3, 30);
+        metadata.artist = latin1_to_utf8(raw + 33, 30);
+        metadata.album = latin1_to_utf8(raw + 63, 30);
     }
 
-    bool _equal_ascii(std::string_view left, std::string_view right)
+    [[nodiscard]] bool equal_ascii(std::string_view left, std::string_view right)
     {
         if (left.size() != right.size()) {
             return false;
@@ -339,7 +339,7 @@ namespace {
         return true;
     }
 
-    int _base64_value(char character)
+    [[nodiscard]] int base64_value(char character)
     {
         if (character >= 'A' && character <= 'Z') {
             return character - 'A';
@@ -359,10 +359,10 @@ namespace {
         return -1;
     }
 
-    std::vector<unsigned char> _base64_decode(std::string_view encoded)
+    [[nodiscard]] std::vector<unsigned char> base64_decode(std::string_view encoded)
     {
         std::vector<unsigned char> _result;
-        if (encoded.size() > (_maximum_cover_size * 4 + 2) / 3 + 4) {
+        if (encoded.size() > (maximum_cover_size * 4 + 2) / 3 + 4) {
             return _result;
         }
         std::uint32_t _buffer = 0;
@@ -371,7 +371,7 @@ namespace {
             if (_character == '=') {
                 break;
             }
-            const int _value = _base64_value(_character);
+            const int _value = base64_value(_character);
             if (_value < 0) {
                 return { };
             }
@@ -380,7 +380,7 @@ namespace {
             if (_bits >= 8) {
                 _bits -= 8;
                 _result.push_back(static_cast<unsigned char>((_buffer >> _bits) & 0xff));
-                if (_result.size() > _maximum_cover_size) {
+                if (_result.size() > maximum_cover_size) {
                     return { };
                 }
             }
@@ -388,13 +388,13 @@ namespace {
         return _result;
     }
 
-    void _parse_flac_picture(audio_metadata& metadata, const unsigned char* data, std::size_t size)
+    void parse_flac_picture(audio_metadata& metadata, const unsigned char* data, std::size_t size)
     {
         if (!metadata.cover_bytes.empty() || size < 32) {
             return;
         }
         std::size_t _cursor = 4;
-        const std::uint32_t _mime_size = _big_endian_u32(data + _cursor);
+        const std::uint32_t _mime_size = big_endian_u32(data + _cursor);
         _cursor += 4;
         if (_mime_size > size - _cursor) {
             return;
@@ -403,7 +403,7 @@ namespace {
         if (size - _cursor < 4) {
             return;
         }
-        const std::uint32_t _description_size = _big_endian_u32(data + _cursor);
+        const std::uint32_t _description_size = big_endian_u32(data + _cursor);
         _cursor += 4;
         if (_description_size > size - _cursor) {
             return;
@@ -413,41 +413,41 @@ namespace {
             return;
         }
         _cursor += 16;
-        const std::uint32_t _picture_size = _big_endian_u32(data + _cursor);
+        const std::uint32_t _picture_size = big_endian_u32(data + _cursor);
         _cursor += 4;
         if (_picture_size <= size - _cursor) {
-            _set_cover(metadata, data + _cursor, _picture_size);
+            set_cover(metadata, data + _cursor, _picture_size);
         }
     }
 
-    void _parse_vorbis_comment(audio_metadata& metadata, std::string_view comment)
+    void parse_vorbis_comment(audio_metadata& metadata, std::string_view comment)
     {
         const std::string_view::size_type _separator = comment.find('=');
         if (_separator == std::string_view::npos) {
             return;
         }
         const std::string_view _key = comment.substr(0, _separator);
-        const std::string _value = _clean_text(std::string(comment.substr(_separator + 1)));
+        const std::string _value = clean_text(std::string(comment.substr(_separator + 1)));
         if (_value.empty()) {
             return;
         }
-        if (_equal_ascii(_key, "TITLE") && metadata.title.empty()) {
+        if (equal_ascii(_key, "TITLE") && metadata.title.empty()) {
             metadata.title = _value;
-        } else if (_equal_ascii(_key, "ARTIST") && metadata.artist.empty()) {
+        } else if (equal_ascii(_key, "ARTIST") && metadata.artist.empty()) {
             metadata.artist = _value;
-        } else if (_equal_ascii(_key, "ALBUM") && metadata.album.empty()) {
+        } else if (equal_ascii(_key, "ALBUM") && metadata.album.empty()) {
             metadata.album = _value;
-        } else if (_equal_ascii(_key, "TRACKNUMBER") && metadata.track_number == 0) {
-            metadata.track_number = _parse_track_number(_value);
-        } else if (_equal_ascii(_key, "METADATA_BLOCK_PICTURE") && metadata.cover_bytes.empty()) {
-            const std::vector<unsigned char> _picture = _base64_decode(_value);
+        } else if (equal_ascii(_key, "TRACKNUMBER") && metadata.track_number == 0) {
+            metadata.track_number = parse_track_number(_value);
+        } else if (equal_ascii(_key, "METADATA_BLOCK_PICTURE") && metadata.cover_bytes.empty()) {
+            const std::vector<unsigned char> _picture = base64_decode(_value);
             if (!_picture.empty()) {
-                _parse_flac_picture(metadata, _picture.data(), _picture.size());
+                parse_flac_picture(metadata, _picture.data(), _picture.size());
             }
         }
     }
 
-    std::uint64_t _duration_milliseconds(std::uint64_t frames, std::uint32_t sample_rate)
+    [[nodiscard]] std::uint64_t duration_milliseconds(std::uint64_t frames, std::uint32_t sample_rate)
     {
         if (sample_rate == 0) {
             return 0;
@@ -455,12 +455,12 @@ namespace {
         return (frames / sample_rate) * 1'000 + ((frames % sample_rate) * 1'000) / sample_rate;
     }
 
-    std::uint32_t _little_endian_u32(const unsigned char* data)
+    [[nodiscard]] std::uint32_t little_endian_u32(const unsigned char* data)
     {
         return static_cast<std::uint32_t>(data[0]) | (static_cast<std::uint32_t>(data[1]) << 8) | (static_cast<std::uint32_t>(data[2]) << 16) | (static_cast<std::uint32_t>(data[3]) << 24);
     }
 
-    audio_metadata _inspect_mp3_tags(const std::filesystem::path& path)
+    [[nodiscard]] audio_metadata inspect_mp3_tags(const std::filesystem::path& path)
     {
         audio_metadata _metadata;
         std::ifstream _input(path, std::ios::binary);
@@ -475,7 +475,7 @@ namespace {
             _input.seekg(_length - static_cast<std::streamoff>(_id3v1.size()), std::ios::beg);
             _input.read(reinterpret_cast<char*>(_id3v1.data()), _id3v1.size());
             if (_input) {
-                _parse_id3v1(_metadata, _id3v1.data(), _id3v1.size());
+                parse_id3v1(_metadata, _id3v1.data(), _id3v1.size());
             }
         }
 
@@ -485,7 +485,7 @@ namespace {
         _input.read(reinterpret_cast<char*>(_header.data()), _header.size());
         if (_input && std::memcmp(_header.data(), "ID3", 3) == 0) {
             constexpr std::size_t _maximum_tag_size = 16 * 1024 * 1024;
-            const std::size_t _body_size = _synchsafe_u32(_header.data() + 6);
+            const std::size_t _body_size = synchsafe_u32(_header.data() + 6);
             if (_body_size <= _maximum_tag_size && _length >= 0 && _body_size <= static_cast<std::uint64_t>(_length) - _header.size()) {
                 std::vector<unsigned char> _tag(_header.begin(), _header.end());
                 _tag.resize(_header.size() + _body_size);
@@ -493,14 +493,14 @@ namespace {
                     reinterpret_cast<char*>(_tag.data() + _header.size()),
                     static_cast<std::streamsize>(_body_size));
                 if (_input) {
-                    _parse_id3v2(_metadata, _tag.data(), _tag.size());
+                    parse_id3v2(_metadata, _tag.data(), _tag.size());
                 }
             }
         }
         return _metadata;
     }
 
-    audio_metadata _inspect_flac_tags(const std::filesystem::path& path)
+    [[nodiscard]] audio_metadata inspect_flac_tags(const std::filesystem::path& path)
     {
         audio_metadata _metadata;
         std::ifstream _input(path, std::ios::binary);
@@ -520,11 +520,11 @@ namespace {
             _last = (_header[0] & 0x80) != 0;
             const unsigned _type = _header[0] & 0x7f;
             const std::size_t _size = (static_cast<std::size_t>(_header[1]) << 16) | (static_cast<std::size_t>(_header[2]) << 8) | _header[3];
-            if (_type == 6 && _size <= _maximum_cover_size) {
+            if (_type == 6 && _size <= maximum_cover_size) {
                 std::vector<unsigned char> _block(_size);
                 _input.read(reinterpret_cast<char*>(_block.data()), static_cast<std::streamsize>(_block.size()));
                 if (_input) {
-                    _parse_flac_picture(_metadata, _block.data(), _block.size());
+                    parse_flac_picture(_metadata, _block.data(), _block.size());
                 }
                 continue;
             }
@@ -540,7 +540,7 @@ namespace {
             }
 
             std::size_t _cursor = 0;
-            const std::size_t _vendor_size = _little_endian_u32(_block.data());
+            const std::size_t _vendor_size = little_endian_u32(_block.data());
             _cursor += 4;
             if (_vendor_size > _block.size() - _cursor) {
                 break;
@@ -549,22 +549,22 @@ namespace {
             if (_block.size() - _cursor < 4) {
                 break;
             }
-            const std::uint32_t _comment_count = _little_endian_u32(_block.data() + _cursor);
+            const std::uint32_t _comment_count = little_endian_u32(_block.data() + _cursor);
             _cursor += 4;
             for (std::uint32_t _index = 0; _index < _comment_count && _block.size() - _cursor >= 4; ++_index) {
-                const std::size_t _comment_size = _little_endian_u32(_block.data() + _cursor);
+                const std::size_t _comment_size = little_endian_u32(_block.data() + _cursor);
                 _cursor += 4;
                 if (_comment_size > _block.size() - _cursor) {
                     break;
                 }
-                _parse_vorbis_comment(_metadata, std::string_view(reinterpret_cast<const char*>(_block.data() + _cursor), _comment_size));
+                parse_vorbis_comment(_metadata, std::string_view(reinterpret_cast<const char*>(_block.data() + _cursor), _comment_size));
                 _cursor += _comment_size;
             }
         }
         return _metadata;
     }
 
-    audio_metadata _inspect_wav_tags(const std::filesystem::path& path)
+    [[nodiscard]] audio_metadata inspect_wav_tags(const std::filesystem::path& path)
     {
         audio_metadata _metadata;
         std::ifstream _input(path, std::ios::binary);
@@ -580,15 +580,15 @@ namespace {
             if (!_input) {
                 break;
             }
-            const std::size_t _chunk_size = _little_endian_u32(_chunk.data() + 4);
+            const std::size_t _chunk_size = little_endian_u32(_chunk.data() + 4);
             const std::streamoff _next = _input.tellg() + static_cast<std::streamoff>(_chunk_size + (_chunk_size & 1));
             if ((std::memcmp(_chunk.data(), "id3 ", 4) == 0
                     || std::memcmp(_chunk.data(), "ID3 ", 4) == 0)
-                && _chunk_size <= _maximum_cover_size) {
+                && _chunk_size <= maximum_cover_size) {
                 std::vector<unsigned char> _tag(_chunk_size);
                 _input.read(reinterpret_cast<char*>(_tag.data()), static_cast<std::streamsize>(_tag.size()));
                 if (_input) {
-                    _parse_id3v2(_metadata, _tag.data(), _tag.size());
+                    parse_id3v2(_metadata, _tag.data(), _tag.size());
                 }
                 _input.clear();
                 _input.seekg(_next, std::ios::beg);
@@ -614,7 +614,7 @@ namespace {
                 if (!_input) {
                     break;
                 }
-                const std::size_t _field_size = _little_endian_u32(_field.data() + 4);
+                const std::size_t _field_size = little_endian_u32(_field.data() + 4);
                 _consumed += 8;
                 if (_field_size > _chunk_size - _consumed) {
                     break;
@@ -624,7 +624,7 @@ namespace {
                 if (!_input) {
                     break;
                 }
-                const std::string _value = _latin1_to_utf8(_text.data(), _text.size());
+                const std::string _value = latin1_to_utf8(_text.data(), _text.size());
                 if (std::memcmp(_field.data(), "INAM", 4) == 0) {
                     _metadata.title = _value;
                 } else if (std::memcmp(_field.data(), "IART", 4) == 0) {
@@ -632,7 +632,7 @@ namespace {
                 } else if (std::memcmp(_field.data(), "IPRD", 4) == 0) {
                     _metadata.album = _value;
                 } else if (std::memcmp(_field.data(), "IPRT", 4) == 0) {
-                    _metadata.track_number = _parse_track_number(_value);
+                    _metadata.track_number = parse_track_number(_value);
                 }
                 _consumed += _field_size;
                 if ((_field_size & 1) != 0) {
@@ -646,7 +646,7 @@ namespace {
         return _metadata;
     }
 
-    audio_metadata _inspect_ogg_tags(const std::filesystem::path& path)
+    [[nodiscard]] audio_metadata inspect_ogg_tags(const std::filesystem::path& path)
     {
 #ifdef _WIN32
         FILE* _file = nullptr;
@@ -669,11 +669,11 @@ namespace {
         const stb_vorbis_comment _comments = stb_vorbis_get_comment(_decoder);
         for (int _index = 0; _index < _comments.comment_list_length; ++_index) {
             if (_comments.comment_list[_index] != nullptr) {
-                _parse_vorbis_comment(_metadata, _comments.comment_list[_index]);
+                parse_vorbis_comment(_metadata, _comments.comment_list[_index]);
             }
         }
         const stb_vorbis_info _info = stb_vorbis_get_info(_decoder);
-        _metadata.duration_ms = _duration_milliseconds(
+        _metadata.duration_ms = duration_milliseconds(
             stb_vorbis_stream_length_in_samples(_decoder),
             _info.sample_rate);
         stb_vorbis_close(_decoder);
@@ -681,7 +681,7 @@ namespace {
         return _metadata;
     }
 
-    std::uint64_t _inspect_duration(const std::filesystem::path& path)
+    [[nodiscard]] std::uint64_t inspect_duration(const std::filesystem::path& path)
     {
         ma_decoder _decoder { };
         const ma_decoder_config _configuration = ma_decoder_config_init_default();
@@ -701,7 +701,7 @@ namespace {
         if (_measured != MA_SUCCESS) {
             throw audio_error("Could not determine audio duration: " + path.u8string());
         }
-        return _duration_milliseconds(_frames, _sample_rate);
+        return duration_milliseconds(_frames, _sample_rate);
     }
 }
 
@@ -801,22 +801,22 @@ audio_metadata inspect_audio_file(const std::filesystem::path& path, audio_exten
     audio_metadata _metadata;
     switch (extension) {
     case audio_extension::mp3:
-        _metadata = _inspect_mp3_tags(path);
+        _metadata = inspect_mp3_tags(path);
         break;
     case audio_extension::wav:
-        _metadata = _inspect_wav_tags(path);
+        _metadata = inspect_wav_tags(path);
         break;
     case audio_extension::flac:
-        _metadata = _inspect_flac_tags(path);
+        _metadata = inspect_flac_tags(path);
         break;
     case audio_extension::ogg:
-        _metadata = _inspect_ogg_tags(path);
+        _metadata = inspect_ogg_tags(path);
         break;
     default:
         throw audio_error("Audio extension is not supported");
     }
 
-    _metadata.duration_ms = _inspect_duration(path);
+    _metadata.duration_ms = inspect_duration(path);
     if (_metadata.title.empty()) {
         _metadata.title = path.stem().u8string();
     }
@@ -920,7 +920,7 @@ struct stream_audio_source::implementation {
         if (_client == nullptr) {
             throw audio_error("Cannot stream audio from a null peer");
         }
-        if (!_is_audio_asset_hash(_hash)) {
+        if (!is_audio_asset_hash(_hash)) {
             throw audio_error("Audio asset hash must contain 64 hexadecimal characters");
         }
         if (_total_size == 0) {

@@ -52,9 +52,6 @@ endif()
 set_target_properties(soundstep PROPERTIES
     CXX_STANDARD 17
     CXX_STANDARD_REQUIRED ON)
-if(NOT ANDROID)
-    set_target_properties(soundstep PROPERTIES OUTPUT_NAME "SoundStep")
-endif()
 if(SOUNDSTEP_OUTPUT_DIR)
     set_target_properties(soundstep PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY "${SOUNDSTEP_OUTPUT_DIR}"

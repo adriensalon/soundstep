@@ -1,5 +1,3 @@
-# soundstep
-
 Modern music player with P2P library sharing for Windows, Linux and Android over LAN and IPv6, connected devices share their local library to their connected peers.
 
 ![](/image/readme_000.png "")

@@ -38,28 +38,29 @@
 namespace soundstep {
 namespace {
 
-    constexpr std::string_view _instance_path = "/v1/instance";
-    constexpr std::string_view _catalog_path = "/v1/catalog";
-    constexpr std::string_view _asset_path = "/v1/assets/";
-    constexpr std::string_view _discovery_path = "/v1/discovery";
-    constexpr const char* _discovery_address = "239.255.83.83";
-    constexpr std::uint16_t _discovery_port = 51412;
-    constexpr std::chrono::seconds _announcement_interval { 3 };
-    constexpr std::chrono::seconds _synchronization_interval { 15 };
-    constexpr std::chrono::seconds _refresh_interval { 60 };
-    constexpr std::size_t _maximum_discovery_size = 4096;
+    constexpr std::string_view instance_path = "/v1/instance";
+    constexpr std::string_view catalog_path = "/v1/catalog";
+    constexpr std::string_view assets_path = "/v1/assets/";
+    constexpr std::string_view discovery_path = "/v1/discovery";
+    constexpr const char* discovery_address = "239.255.83.83";
+    constexpr std::uint16_t discovery_port = 51412;
+    constexpr std::chrono::seconds announcement_interval { 3 };
+    constexpr std::chrono::seconds synchronization_interval { 15 };
+    constexpr std::chrono::seconds refresh_interval { 60 };
+    constexpr std::size_t maximum_discovery_size = 4096;
 
 #ifdef _WIN32
-    using _socket_handle = SOCKET;
-    constexpr _socket_handle _invalid_socket = INVALID_SOCKET;
+    using socket_handle = SOCKET;
 
-    void _close_socket(_socket_handle socket)
+    constexpr socket_handle invalid_socket = INVALID_SOCKET;
+
+    void close_socket(socket_handle socket)
     {
         closesocket(socket);
     }
 
-    struct _socket_runtime {
-        _socket_runtime()
+    struct socket_runtime {
+        socket_runtime()
         {
             WSADATA _data { };
             if (WSAStartup(MAKEWORD(2, 2), &_data) != 0) {
@@ -67,31 +68,32 @@ namespace {
             }
         }
 
-        ~_socket_runtime()
+        ~socket_runtime()
         {
             WSACleanup();
         }
     };
 #else
-    using _socket_handle = int;
-    constexpr _socket_handle _invalid_socket = -1;
+    using socket_handle = int;
 
-    void _close_socket(_socket_handle socket)
+    constexpr socket_handle invalid_socket = -1;
+
+    void close_socket(socket_handle socket)
     {
         close(socket);
     }
 
-    struct _socket_runtime { };
+    struct socket_runtime { };
 #endif
 
-    std::uint64_t _current_time_ms()
+    [[nodiscard]] std::uint64_t current_time_ms()
     {
         return static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
             std::chrono::system_clock::now().time_since_epoch())
                 .count());
     }
 
-    std::string _normalized_host(std::string host)
+    [[nodiscard]] std::string normalized_host(std::string host)
     {
         constexpr std::string_view _ipv4_mapped_prefix = "::ffff:";
         if (host.size() > _ipv4_mapped_prefix.size() && host.compare(0, _ipv4_mapped_prefix.size(), _ipv4_mapped_prefix) == 0) {
@@ -100,9 +102,9 @@ namespace {
         return host;
     }
 
-    void _add_endpoint(std::vector<peer_endpoint>& endpoints, std::string host, std::uint16_t port, peer_endpoint_family family)
+    void add_endpoint(std::vector<peer_endpoint>& endpoints, std::string host, std::uint16_t port, peer_endpoint_family family)
     {
-        host = _normalized_host(std::move(host));
+        host = normalized_host(std::move(host));
         if (host.empty() || port == 0 || endpoints.size() >= protocol_maximum_endpoint_count) {
             return;
         }
@@ -114,7 +116,7 @@ namespace {
         endpoints.push_back({ std::move(host), port, family, 0, 0 });
     }
 
-    void _add_socket_endpoint(std::vector<peer_endpoint>& endpoints, const sockaddr* address, std::uint16_t port)
+    void add_socket_endpoint(std::vector<peer_endpoint>& endpoints, const sockaddr* address, std::uint16_t port)
     {
         if (address == nullptr) {
             return;
@@ -127,7 +129,7 @@ namespace {
             }
             std::array<char, INET_ADDRSTRLEN> _host { };
             if (inet_ntop(AF_INET, &_address->sin_addr, _host.data(), static_cast<socklen_t>(_host.size())) != nullptr) {
-                _add_endpoint(endpoints, _host.data(), port, peer_endpoint_family::ipv4);
+                add_endpoint(endpoints, _host.data(), port, peer_endpoint_family::ipv4);
             }
             return;
         }
@@ -142,12 +144,12 @@ namespace {
             }
             std::array<char, INET6_ADDRSTRLEN> _host { };
             if (inet_ntop(AF_INET6, &_address->sin6_addr, _host.data(), static_cast<socklen_t>(_host.size())) != nullptr) {
-                _add_endpoint(endpoints, _host.data(), port, peer_endpoint_family::ipv6);
+                add_endpoint(endpoints, _host.data(), port, peer_endpoint_family::ipv6);
             }
         }
     }
 
-    std::vector<peer_endpoint> _local_endpoints(std::uint16_t port)
+    [[nodiscard]] std::vector<peer_endpoint> local_endpoints(std::uint16_t port)
     {
         std::vector<peer_endpoint> _result;
 #ifdef _WIN32
@@ -182,7 +184,7 @@ namespace {
             for (const IP_ADAPTER_UNICAST_ADDRESS* _address = _adapter->FirstUnicastAddress;
                 _address != nullptr;
                 _address = _address->Next) {
-                _add_socket_endpoint(_result, _address->Address.lpSockaddr, port);
+                add_socket_endpoint(_result, _address->Address.lpSockaddr, port);
             }
         }
 #else
@@ -196,7 +198,7 @@ namespace {
             if ((_address->ifa_flags & IFF_UP) == 0 || (_address->ifa_flags & IFF_LOOPBACK) != 0) {
                 continue;
             }
-            _add_socket_endpoint(_result, _address->ifa_addr, port);
+            add_socket_endpoint(_result, _address->ifa_addr, port);
         }
         freeifaddrs(_addresses);
 #endif
@@ -209,7 +211,7 @@ namespace {
         return _result;
     }
 
-    bool _same_endpoint_set(const std::vector<peer_endpoint>& left, const std::vector<peer_endpoint>& right)
+    [[nodiscard]] bool same_endpoint_set(const std::vector<peer_endpoint>& left, const std::vector<peer_endpoint>& right)
     {
         if (left.size() != right.size()) {
             return false;
@@ -224,16 +226,16 @@ namespace {
         return true;
     }
 
-    struct _discovery_datagram {
-        std::string _host { };
-        std::string _payload { };
+    struct discovery_datagram {
+        std::string host { };
+        std::string payload { };
     };
 
-    struct _discovery_socket {
-        _discovery_socket()
+    struct discovery_socket {
+        discovery_socket()
         {
             _handle = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
-            if (_handle == _invalid_socket) {
+            if (_handle == invalid_socket) {
                 throw peer_error("Could not create the LAN discovery socket");
             }
 
@@ -242,25 +244,25 @@ namespace {
 
             sockaddr_in _local { };
             _local.sin_family = AF_INET;
-            _local.sin_port = htons(_discovery_port);
+            _local.sin_port = htons(discovery_port);
             _local.sin_addr.s_addr = htonl(INADDR_ANY);
             if (bind(_handle, reinterpret_cast<const sockaddr*>(&_local), sizeof(_local)) != 0) {
-                _close_socket(_handle);
-                _handle = _invalid_socket;
+                close_socket(_handle);
+                _handle = invalid_socket;
                 throw peer_error("Could not bind the LAN discovery socket");
             }
 
             ip_mreq _membership { };
-            if (inet_pton(AF_INET, _discovery_address, &_membership.imr_multiaddr) != 1) {
-                _close_socket(_handle);
-                _handle = _invalid_socket;
-                throw peer_error("SoundStep LAN discovery address is invalid");
+            if (inet_pton(AF_INET, discovery_address, &_membership.imr_multiaddr) != 1) {
+                close_socket(_handle);
+                _handle = invalid_socket;
+                throw peer_error("soundstep LAN discovery address is invalid");
             }
             _membership.imr_interface.s_addr = htonl(INADDR_ANY);
             if (setsockopt(_handle, IPPROTO_IP, IP_ADD_MEMBERSHIP, reinterpret_cast<const char*>(&_membership), sizeof(_membership)) != 0) {
-                _close_socket(_handle);
-                _handle = _invalid_socket;
-                throw peer_error("Could not join the SoundStep LAN discovery group");
+                close_socket(_handle);
+                _handle = invalid_socket;
+                throw peer_error("Could not join the soundstep LAN discovery group");
             }
 
 #ifdef _WIN32
@@ -271,27 +273,27 @@ namespace {
             setsockopt(_handle, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&_timeout), sizeof(_timeout));
         }
 
-        ~_discovery_socket()
+        ~discovery_socket()
         {
-            if (_handle != _invalid_socket) {
-                _close_socket(_handle);
+            if (_handle != invalid_socket) {
+                close_socket(_handle);
             }
         }
 
-        _discovery_socket(const _discovery_socket&) = delete;
-        _discovery_socket& operator=(const _discovery_socket&) = delete;
+        discovery_socket(const discovery_socket&) = delete;
+        discovery_socket& operator=(const discovery_socket&) = delete;
 
         void send(std::string_view payload)
         {
-            if (payload.empty() || payload.size() > _maximum_discovery_size) {
+            if (payload.empty() || payload.size() > maximum_discovery_size) {
                 throw peer_error("LAN discovery announcement has an invalid size");
             }
 
             sockaddr_in _destination { };
             _destination.sin_family = AF_INET;
-            _destination.sin_port = htons(_discovery_port);
-            if (inet_pton(AF_INET, _discovery_address, &_destination.sin_addr) != 1) {
-                throw peer_error("SoundStep LAN discovery address is invalid");
+            _destination.sin_port = htons(discovery_port);
+            if (inet_pton(AF_INET, discovery_address, &_destination.sin_addr) != 1) {
+                throw peer_error("soundstep LAN discovery address is invalid");
             }
             const int _sent = sendto(_handle, payload.data(), static_cast<int>(payload.size()), 0, reinterpret_cast<const sockaddr*>(&_destination), sizeof(_destination));
             if (_sent != static_cast<int>(payload.size())) {
@@ -299,9 +301,9 @@ namespace {
             }
         }
 
-        std::optional<_discovery_datagram> receive()
+        [[nodiscard]] std::optional<discovery_datagram> receive()
         {
-            std::array<char, _maximum_discovery_size> _buffer { };
+            std::array<char, maximum_discovery_size> _buffer { };
             sockaddr_in _sender { };
 #ifdef _WIN32
             int _sender_size = sizeof(_sender);
@@ -317,14 +319,14 @@ namespace {
             if (inet_ntop(AF_INET, &_sender.sin_addr, _host.data(), static_cast<socklen_t>(_host.size())) == nullptr) {
                 return std::nullopt;
             }
-            return _discovery_datagram { _host.data(), std::string(_buffer.data(), static_cast<std::size_t>(_received)) };
+            return discovery_datagram { _host.data(), std::string(_buffer.data(), static_cast<std::size_t>(_received)) };
         }
 
     private:
-        _socket_handle _handle { _invalid_socket };
+        socket_handle _handle { invalid_socket };
     };
 
-    bool _is_asset_hash(std::string_view hash)
+    [[nodiscard]] bool is_asset_hash(std::string_view hash)
     {
         if (hash.size() != 64) {
             return false;
@@ -342,12 +344,12 @@ namespace {
         return true;
     }
 
-    peer_response _invalid_hash_response()
+    [[nodiscard]] peer_response invalid_hash_response()
     {
         return { 0, { }, "Asset hash must contain exactly 64 hexadecimal characters" };
     }
 
-    transport_identity _load_transport_identity(storage& store)
+    [[nodiscard]] transport_identity load_transport_identity(storage& store)
     {
         const std::optional<transport_identity> _stored = store.transport_identity();
         if (_stored) {
@@ -358,13 +360,13 @@ namespace {
         return _created;
     }
 
-    void _set_error(httplib::Response& response, int status, std::string message)
+    void set_error(httplib::Response& response, int status, std::string message)
     {
         response.status = status;
         response.set_content(std::move(message), "text/plain; charset=utf-8");
     }
 
-    bool _authorize(const httplib::Request& request, httplib::Response& response, storage& store, std::string* accepted_token = nullptr)
+    bool authorize(const httplib::Request& request, httplib::Response& response, storage& store, std::string* accepted_token = nullptr)
     {
         constexpr std::string_view _prefix = "Bearer ";
         const std::string _authorization = request.get_header_value("Authorization");
@@ -381,11 +383,11 @@ namespace {
             accepted_token->clear();
         }
         response.set_header("WWW-Authenticate", "Bearer");
-        _set_error(response, 401, "A valid Soundstep access token is required");
+        set_error(response, 401, "A valid Soundstep access token is required");
         return false;
     }
 
-    std::string _response_message(std::string message, const peer_response& response)
+    [[nodiscard]] std::string response_message(std::string message, const peer_response& response)
     {
         if (!response.error_message.empty()) {
             return message + ": " + response.error_message;
@@ -396,9 +398,9 @@ namespace {
         return message;
     }
 
-    void _merge_endpoint(std::vector<peer_endpoint>& endpoints, peer_endpoint value)
+    void merge_endpoint(std::vector<peer_endpoint>& endpoints, peer_endpoint value)
     {
-        value.host = _normalized_host(std::move(value.host));
+        value.host = normalized_host(std::move(value.host));
         for (peer_endpoint& _endpoint : endpoints) {
             if (_endpoint.host == value.host && _endpoint.port == value.port) {
                 _endpoint.family = value.family;
@@ -412,19 +414,19 @@ namespace {
         }
     }
 
-    peer_endpoint_family _host_family(std::string_view host)
+    [[nodiscard]] peer_endpoint_family host_family(std::string_view host)
     {
         return host.find(':') == std::string_view::npos
             ? peer_endpoint_family::ipv4
             : peer_endpoint_family::ipv6;
     }
 
-    peer_record _synchronize_peer(storage& store, const peer_endpoint& connection, std::vector<peer_endpoint> endpoints, std::string token, std::string fingerprint, peer_origin origin, std::string_view expected_id)
+    [[nodiscard]] peer_record synchronize_peer(storage& store, const peer_endpoint& connection, std::vector<peer_endpoint> endpoints, std::string token, std::string fingerprint, peer_origin origin, std::string_view expected_id)
     {
         peer_client _client(connection.host, connection.port, token, fingerprint);
         peer_response _identity_response = _client.fetch_instance();
         if (!_identity_response) {
-            throw peer_error(_response_message("Could not read peer identity", _identity_response));
+            throw peer_error(response_message("Could not read peer identity", _identity_response));
         }
 
         const instance_info _identity = protocol_decode_instance(_identity_response.body);
@@ -435,25 +437,25 @@ namespace {
             throw peer_error("The local instance cannot pair with itself");
         }
 
-        const std::uint64_t _now = _current_time_ms();
+        const std::uint64_t _now = current_time_ms();
         for (peer_endpoint& _endpoint : endpoints) {
             if (_endpoint.last_seen_ms == 0) {
                 _endpoint.last_seen_ms = _now;
             }
         }
         peer_endpoint _successful = connection;
-        _successful.host = _normalized_host(std::move(_successful.host));
-        _successful.family = _host_family(_successful.host);
+        _successful.host = normalized_host(std::move(_successful.host));
+        _successful.family = host_family(_successful.host);
         _successful.last_seen_ms = _now;
         _successful.last_success_ms = _now;
-        _merge_endpoint(endpoints, std::move(_successful));
+        merge_endpoint(endpoints, std::move(_successful));
 
         peer_record _record { _identity.id, _identity.name, std::move(token), std::move(fingerprint), origin, _now, true, std::move(endpoints) };
         store.upsert_peer(_record);
 
         peer_response _catalog_response = _client.fetch_catalog();
         if (!_catalog_response) {
-            throw peer_error(_response_message("Could not read peer catalog", _catalog_response));
+            throw peer_error(response_message("Could not read peer catalog", _catalog_response));
         }
 
         catalog_snapshot _catalog = protocol_decode_catalog(_catalog_response.body);
@@ -468,7 +470,7 @@ namespace {
         return _record;
     }
 
-    peer_record _synchronize_candidates(storage& store, const std::vector<peer_endpoint>& endpoints, std::string token, std::string fingerprint, peer_origin origin, std::string_view expected_id)
+    peer_record synchronize_candidates(storage& store, const std::vector<peer_endpoint>& endpoints, std::string token, std::string fingerprint, peer_origin origin, std::string_view expected_id)
     {
         if (endpoints.empty()) {
             throw peer_error("Peer has no usable endpoint");
@@ -477,7 +479,7 @@ namespace {
         std::string _last_error;
         for (const peer_endpoint& _endpoint : endpoints) {
             try {
-                return _synchronize_peer(store, _endpoint, endpoints, token, fingerprint, origin, expected_id);
+                return synchronize_peer(store, _endpoint, endpoints, token, fingerprint, origin, expected_id);
             } catch (const std::exception& _exception) {
                 _last_error = _exception.what();
             }
@@ -485,21 +487,21 @@ namespace {
         throw peer_error(_last_error.empty() ? "Could not connect to any peer endpoint" : _last_error);
     }
 
-    std::vector<peer_endpoint> _with_observed_endpoint(const std::vector<peer_endpoint>& advertised, std::string host)
+    [[nodiscard]] std::vector<peer_endpoint> with_observed_endpoint(const std::vector<peer_endpoint>& advertised, std::string host)
     {
         if (advertised.empty()) {
             throw peer_error("Peer announcement has no endpoint");
         }
-        const std::uint64_t _now = _current_time_ms();
-        host = _normalized_host(std::move(host));
+        const std::uint64_t _now = current_time_ms();
+        host = normalized_host(std::move(host));
         std::vector<peer_endpoint> _result;
         _result.reserve(advertised.size() + 1);
-        _merge_endpoint(_result, { host, advertised.front().port, _host_family(host), _now, 0 });
+        merge_endpoint(_result, { host, advertised.front().port, host_family(host), _now, 0 });
         for (peer_endpoint _endpoint : advertised) {
             if (_endpoint.last_seen_ms == 0) {
                 _endpoint.last_seen_ms = _now;
             }
-            _merge_endpoint(_result, std::move(_endpoint));
+            merge_endpoint(_result, std::move(_endpoint));
         }
         return _result;
     }
@@ -544,7 +546,7 @@ struct peer_client::implementation {
         , _headers { { "Authorization", "Bearer " + std::move(peer_token) } }
         , _fingerprint(std::move(fingerprint))
     {
-        _endpoints.front().family = _host_family(_endpoints.front().host);
+        _endpoints.front().family = host_family(_endpoints.front().host);
         if (_fingerprint.size() != 64) {
             throw peer_error("Peer transport fingerprint is invalid");
         }
@@ -633,7 +635,7 @@ struct peer_client::implementation {
 
 struct peer_server::implementation {
     implementation(storage& store, std::uint16_t requested_port, std::string bind_address)
-        : _identity(_load_transport_identity(store))
+        : _identity(load_transport_identity(store))
         , _server(std::make_unique<httplib::SSLServer>(httplib::SSLServer::PemMemory {
               _identity.certificate_pem.c_str(),
               _identity.certificate_pem.size(),
@@ -656,39 +658,39 @@ struct peer_server::implementation {
             return new httplib::ThreadPool(4);
         };
 
-        _server->Get(_instance_path.data(), [&store](const httplib::Request& request, httplib::Response& response) {
-            if (!_authorize(request, response, store)) {
+        _server->Get(instance_path.data(), [&store](const httplib::Request& request, httplib::Response& response) {
+            if (!authorize(request, response, store)) {
                 return;
             }
             response.set_header("Cache-Control", "no-store");
             response.set_content(protocol_encode_instance(store.instance()), std::string(protocol_content_type));
         });
 
-        _server->Get(_catalog_path.data(), [&store](const httplib::Request& request, httplib::Response& response) {
-            if (!_authorize(request, response, store)) {
+        _server->Get(catalog_path.data(), [&store](const httplib::Request& request, httplib::Response& response) {
+            if (!authorize(request, response, store)) {
                 return;
             }
             const instance_info _instance = store.instance();
             const std::optional<catalog_snapshot> _catalog = store.catalog(_instance.id);
             if (!_catalog) {
-                _set_error(response, 500, "Local catalog was not found");
+                set_error(response, 500, "Local catalog was not found");
                 return;
             }
             response.set_header("Cache-Control", "no-store");
             response.set_content(protocol_encode_catalog(*_catalog), std::string(protocol_content_type));
         });
 
-        _server->Post(_discovery_path.data(), [&store](const httplib::Request& request, httplib::Response& response) {
+        _server->Post(discovery_path.data(), [&store](const httplib::Request& request, httplib::Response& response) {
             try {
                 std::string _access_token;
-                if (!_authorize(request, response, store, &_access_token)) {
+                if (!authorize(request, response, store, &_access_token)) {
                     return;
                 }
                 const peer_discovery _announcement = protocol_decode_discovery(request.body);
                 const bool _lan_access = _access_token == store.lan_token();
-                _synchronize_candidates(
+                synchronize_candidates(
                     store,
-                    _with_observed_endpoint(_announcement.endpoints, request.remote_addr),
+                    with_observed_endpoint(_announcement.endpoints, request.remote_addr),
                     _announcement.token,
                     _announcement.fingerprint,
                     _lan_access ? peer_origin::lan : peer_origin::pairing_code,
@@ -698,22 +700,22 @@ struct peer_server::implementation {
                 }
                 response.status = 204;
             } catch (const std::exception& _exception) {
-                _set_error(response, 400, _exception.what());
+                set_error(response, 400, _exception.what());
             }
         });
 
         _server->Get("/v1/covers/:hash", [&store](const httplib::Request& request, httplib::Response& response) {
-            if (!_authorize(request, response, store)) {
+            if (!authorize(request, response, store)) {
                 return;
             }
             const std::unordered_map<std::string, std::string>::const_iterator _hash = request.path_params.find("hash");
-            if (_hash == request.path_params.end() || !_is_asset_hash(_hash->second)) {
-                _set_error(response, 400, "Invalid cover hash");
+            if (_hash == request.path_params.end() || !is_asset_hash(_hash->second)) {
+                set_error(response, 400, "Invalid cover hash");
                 return;
             }
             const std::optional<cover_art> _cover = store.cover(_hash->second);
             if (!_cover) {
-                _set_error(response, 404, "Cover was not found");
+                set_error(response, 404, "Cover was not found");
                 return;
             }
             response.set_header("Cache-Control", "public, immutable");
@@ -725,31 +727,31 @@ struct peer_server::implementation {
         });
 
         _server->Get("/v1/assets/:hash", [&store](const httplib::Request& request, httplib::Response& response) {
-            if (!_authorize(request, response, store)) {
+            if (!authorize(request, response, store)) {
                 return;
             }
             const std::unordered_map<std::string, std::string>::const_iterator _hash = request.path_params.find("hash");
-            if (_hash == request.path_params.end() || !_is_asset_hash(_hash->second)) {
-                _set_error(response, 400, "Invalid asset hash");
+            if (_hash == request.path_params.end() || !is_asset_hash(_hash->second)) {
+                set_error(response, 400, "Invalid asset hash");
                 return;
             }
 
             const std::optional<file_location> _file = store.find_file(_hash->second);
             if (!_file) {
-                _set_error(response, 404, "Asset was not found");
+                set_error(response, 404, "Asset was not found");
                 return;
             }
 
             std::error_code _filesystem_error;
             const std::filesystem::path _path = std::filesystem::u8path(_file->path);
             if (!std::filesystem::is_regular_file(_path, _filesystem_error) || _filesystem_error) {
-                _set_error(response, 404, "Asset file was not found");
+                set_error(response, 404, "Asset file was not found");
                 return;
             }
 
             const std::uint64_t _actual_size = std::filesystem::file_size(_path, _filesystem_error);
             if (_filesystem_error || _actual_size != _file->size_bytes) {
-                _set_error(response, 409, "Asset file no longer matches the catalog");
+                set_error(response, 409, "Asset file no longer matches the catalog");
                 return;
             }
 
@@ -817,7 +819,7 @@ struct peer_network::implementation {
 
     peer_record synchronize(const std::vector<peer_endpoint>& endpoints, std::string token, std::string fingerprint, peer_origin origin, std::string_view expected_id)
     {
-        return _synchronize_candidates(
+        return synchronize_candidates(
             _store,
             endpoints,
             std::move(token),
@@ -843,7 +845,7 @@ struct peer_network::implementation {
                     if (_refreshed.origin == peer_origin::pairing_code) {
                         peer_client _client(_store, _refreshed);
                         static_cast<void>(_client.announce({ _store.instance(),
-                            _local_endpoints(_server.port()),
+                            local_endpoints(_server.port()),
                             _store.access_token_for_peer(_refreshed.id),
                             _server.fingerprint() }));
                     }
@@ -858,32 +860,32 @@ struct peer_network::implementation {
         refresh_catalogs();
         while (!_stop.load(std::memory_order_acquire)) {
             try {
-                _discovery_socket _socket;
+                discovery_socket _socket;
                 std::chrono::steady_clock::time_point _next_announcement { };
-                std::chrono::steady_clock::time_point _next_refresh = std::chrono::steady_clock::now() + _refresh_interval;
+                std::chrono::steady_clock::time_point _next_refresh = std::chrono::steady_clock::now() + refresh_interval;
                 std::vector<peer_endpoint> _known_endpoints;
 
                 while (!_stop.load(std::memory_order_acquire)) {
                     const std::chrono::steady_clock::time_point _now = std::chrono::steady_clock::now();
                     if (_now >= _next_announcement) {
-                        const std::vector<peer_endpoint> _current_endpoints = _local_endpoints(_server.port());
-                        const bool _network_changed = !_known_endpoints.empty() && !_same_endpoint_set(_known_endpoints, _current_endpoints);
+                        const std::vector<peer_endpoint> _current_endpoints = local_endpoints(_server.port());
+                        const bool _network_changed = !_known_endpoints.empty() && !same_endpoint_set(_known_endpoints, _current_endpoints);
                         if (_store.config().lan_discovery_enabled) {
                             _socket.send(protocol_encode_discovery({ _store.instance(), _current_endpoints, _store.lan_token(), _server.fingerprint() }));
                         }
                         _known_endpoints = _current_endpoints;
-                        _next_announcement = _now + _announcement_interval;
+                        _next_announcement = _now + announcement_interval;
                         if (_network_changed) {
                             refresh_catalogs();
-                            _next_refresh = _now + _refresh_interval;
+                            _next_refresh = _now + refresh_interval;
                         }
                     }
                     if (_refresh_requested.exchange(false, std::memory_order_acq_rel) || _now >= _next_refresh) {
                         refresh_catalogs();
-                        _next_refresh = _now + _refresh_interval;
+                        _next_refresh = _now + refresh_interval;
                     }
 
-                    const std::optional<_discovery_datagram> _datagram = _socket.receive();
+                    const std::optional<discovery_datagram> _datagram = _socket.receive();
                     if (_datagram) {
                         receive(*_datagram);
                     }
@@ -896,26 +898,26 @@ struct peer_network::implementation {
         }
     }
 
-    void receive(const _discovery_datagram& datagram) noexcept
+    void receive(const discovery_datagram& datagram) noexcept
     {
         try {
-            const peer_discovery _announcement = protocol_decode_discovery(datagram._payload);
+            const peer_discovery _announcement = protocol_decode_discovery(datagram.payload);
             if (_announcement.instance.id == _store.instance().id) {
                 return;
             }
 
             const std::chrono::steady_clock::time_point _now = std::chrono::steady_clock::now();
             const std::unordered_map<std::string, std::chrono::steady_clock::time_point>::const_iterator _previous = _last_synchronized.find(_announcement.instance.id);
-            if (_previous != _last_synchronized.end() && _now - _previous->second < _synchronization_interval) {
+            if (_previous != _last_synchronized.end() && _now - _previous->second < synchronization_interval) {
                 return;
             }
             _last_synchronized.insert_or_assign(_announcement.instance.id, _now);
-            const std::vector<peer_endpoint> _endpoints = _with_observed_endpoint(_announcement.endpoints, datagram._host);
+            const std::vector<peer_endpoint> _endpoints = with_observed_endpoint(_announcement.endpoints, datagram.host);
             const peer_record _record = synchronize(_endpoints, _announcement.token, _announcement.fingerprint, peer_origin::lan, _announcement.instance.id);
             if (_store.config().lan_discovery_enabled) {
                 peer_client _client(_store, _record);
                 static_cast<void>(_client.announce({ _store.instance(),
-                    _local_endpoints(_server.port()),
+                    local_endpoints(_server.port()),
                     _store.lan_token(),
                     _server.fingerprint() }));
             }
@@ -925,7 +927,7 @@ struct peer_network::implementation {
 
     storage& _store;
     peer_server& _server;
-    _socket_runtime _runtime;
+    socket_runtime _runtime;
     std::atomic<bool> _stop { false };
     std::atomic<bool> _refresh_requested { false };
     std::thread _worker;
@@ -958,18 +960,18 @@ peer_client& peer_client::operator=(peer_client&& other) noexcept = default;
 
 peer_response peer_client::fetch_instance()
 {
-    return _implementation->get(_instance_path);
+    return _implementation->get(instance_path);
 }
 
 peer_response peer_client::fetch_catalog()
 {
-    return _implementation->get(_catalog_path);
+    return _implementation->get(catalog_path);
 }
 
 peer_response peer_client::fetch_cover(std::string_view hash)
 {
-    if (!_is_asset_hash(hash)) {
-        return _invalid_hash_response();
+    if (!is_asset_hash(hash)) {
+        return invalid_hash_response();
     }
     return _implementation->get("/v1/covers/" + std::string(hash));
 }
@@ -978,7 +980,7 @@ peer_response peer_client::announce(const peer_discovery& discovery)
 {
     const std::string _body = protocol_encode_discovery(discovery);
     return _implementation->request([&_body](implementation::_connection& remote) {
-        const httplib::Result _result = remote._client.Post(std::string(_discovery_path), remote._headers, _body, std::string(protocol_content_type));
+        const httplib::Result _result = remote._client.Post(std::string(discovery_path), remote._headers, _body, std::string(protocol_content_type));
         if (!_result) {
             return peer_response { 0, { }, httplib::to_string(_result.error()) };
         }
@@ -988,8 +990,8 @@ peer_response peer_client::announce(const peer_discovery& discovery)
 
 peer_response peer_client::stream_asset(std::string_view hash, const chunk_handler& on_chunk, std::uint64_t offset, std::optional<std::uint64_t> length)
 {
-    if (!_is_asset_hash(hash)) {
-        return _invalid_hash_response();
+    if (!is_asset_hash(hash)) {
+        return invalid_hash_response();
     }
     if (!on_chunk) {
         return { 0, { }, "An asset chunk handler is required" };
@@ -1019,7 +1021,7 @@ peer_response peer_client::stream_asset(std::string_view hash, const chunk_handl
 
         bool _handler_stopped = false;
         peer_response _response;
-        const httplib::Result _result = _remote._client.Get(std::string(_asset_path) + std::string(hash), _headers, [&_response, _range_requested](const httplib::Response& incoming) {
+        const httplib::Result _result = _remote._client.Get(std::string(assets_path) + std::string(hash), _headers, [&_response, _range_requested](const httplib::Response& incoming) {
                 _response.status_code = incoming.status;
                 const bool _success = incoming.status >= 200 && incoming.status < 300;
                 const bool _valid_range = !_range_requested || incoming.status == 206;
@@ -1068,8 +1070,8 @@ peer_response peer_client::stream_asset(std::string_view hash, const chunk_handl
 
 peer_response peer_client::download_asset(std::string_view hash, const std::filesystem::path& destination)
 {
-    if (!_is_asset_hash(hash)) {
-        return _invalid_hash_response();
+    if (!is_asset_hash(hash)) {
+        return invalid_hash_response();
     }
     if (std::filesystem::exists(destination)) {
         return { 0, { }, "Download destination already exists" };
@@ -1155,7 +1157,7 @@ peer_network::~peer_network() = default;
 std::string peer_network::create_pairing_code()
 {
     return protocol_encode_invite({ _implementation->_store.instance(),
-        _local_endpoints(_implementation->_server.port()),
+        local_endpoints(_implementation->_server.port()),
         _implementation->_store.create_invitation_token(),
         _implementation->_server.fingerprint() });
 }
@@ -1165,9 +1167,9 @@ void peer_network::accept_pairing_code(std::string_view code)
     const peer_invite _invite = protocol_decode_invite(code);
     const peer_record _record = _implementation->synchronize(_invite.endpoints, _invite.token, _invite.fingerprint, peer_origin::pairing_code, _invite.instance.id);
     peer_client _client(_implementation->_store, _record);
-    const peer_response _announcement = _client.announce({ _implementation->_store.instance(), _local_endpoints(_implementation->_server.port()), _implementation->_store.access_token_for_peer(_record.id), _implementation->_server.fingerprint() });
+    const peer_response _announcement = _client.announce({ _implementation->_store.instance(), local_endpoints(_implementation->_server.port()), _implementation->_store.access_token_for_peer(_record.id), _implementation->_server.fingerprint() });
     if (!_announcement) {
-        throw peer_error(_response_message("Could not complete reciprocal pairing", _announcement));
+        throw peer_error(response_message("Could not complete reciprocal pairing", _announcement));
     }
 }
 

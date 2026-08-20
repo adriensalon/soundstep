@@ -19,24 +19,24 @@
 namespace soundstep {
 namespace {
 
-    constexpr int _schema_version = 1;
-    constexpr std::size_t _maximum_cover_size = 8 * 1024 * 1024;
+    constexpr int schema_version = 1;
+    constexpr std::size_t maximum_cover_size = 8 * 1024 * 1024;
 
-    std::string _path_string(const std::filesystem::path& path)
+    [[nodiscard]] std::string path_string(const std::filesystem::path& path)
     {
         return path.u8string();
     }
 
-    void _require_value(bool condition, std::string message)
+    void require_value(bool condition, std::string message)
     {
         if (!condition) {
             throw storage_error(std::move(message));
         }
     }
 
-    std::string _normalize_hash(std::string_view hash)
+    std::string normalize_hash(std::string_view hash)
     {
-        _require_value(hash.size() == 64, "File hash must contain exactly 64 hexadecimal characters");
+        require_value(hash.size() == 64, "File hash must contain exactly 64 hexadecimal characters");
 
         std::string _normalized;
         _normalized.reserve(hash.size());
@@ -54,9 +54,9 @@ namespace {
         return _normalized;
     }
 
-    std::string _normalize_fingerprint(std::string_view fingerprint)
+    [[nodiscard]] std::string normalize_fingerprint(std::string_view fingerprint)
     {
-        _require_value(fingerprint.size() == 64, "Transport fingerprint must contain exactly 64 hexadecimal characters");
+        require_value(fingerprint.size() == 64, "Transport fingerprint must contain exactly 64 hexadecimal characters");
 
         std::string _normalized;
         _normalized.reserve(fingerprint.size());
@@ -74,47 +74,47 @@ namespace {
         return _normalized;
     }
 
-    sqlite3_int64 _sqlite_integer(std::uint64_t value, std::string_view field)
+    sqlite3_int64 sqlite_integer(std::uint64_t value, std::string_view field)
     {
-        _require_value(value <= static_cast<std::uint64_t>((std::numeric_limits<sqlite3_int64>::max)()), std::string(field) + " is too large for SQLite");
+        require_value(value <= static_cast<std::uint64_t>((std::numeric_limits<sqlite3_int64>::max)()), std::string(field) + " is too large for SQLite");
         return static_cast<sqlite3_int64>(value);
     }
 
-    std::uint64_t _unsigned_integer(sqlite3_int64 value, std::string_view field)
+    [[nodiscard]] std::uint64_t unsigned_integer(sqlite3_int64 value, std::string_view field)
     {
-        _require_value(value >= 0, std::string(field) + " cannot be negative");
+        require_value(value >= 0, std::string(field) + " cannot be negative");
         return static_cast<std::uint64_t>(value);
     }
 
-    std::uint32_t _stored_track_number(sqlite3_int64 value)
+    [[nodiscard]] std::uint32_t stored_track_number(sqlite3_int64 value)
     {
-        const std::uint64_t _number = _unsigned_integer(value, "Track number");
-        _require_value(_number <= (std::numeric_limits<std::uint32_t>::max)(), "Stored track number is too large");
+        const std::uint64_t _number = unsigned_integer(value, "Track number");
+        require_value(_number <= (std::numeric_limits<std::uint32_t>::max)(), "Stored track number is too large");
         return static_cast<std::uint32_t>(_number);
     }
 
-    std::string _normalized_extension(audio_extension extension)
+    std::string normalized_extension(audio_extension extension)
     {
         const std::string_view _name = audio_extension_name(extension);
-        _require_value(!_name.empty(), "Audio extension is not supported");
+        require_value(!_name.empty(), "Audio extension is not supported");
         return std::string(_name);
     }
 
-    audio_extension _stored_extension(std::string_view extension)
+    [[nodiscard]] audio_extension stored_extension(std::string_view extension)
     {
         const std::optional<audio_extension> _parsed = parse_audio_extension(extension);
-        _require_value(_parsed.has_value(), "Stored audio extension is missing or unsupported");
+        require_value(_parsed.has_value(), "Stored audio extension is missing or unsupported");
         return *_parsed;
     }
 
-    std::string _normalized_cover_type(std::string_view content_type)
+    std::string normalized_cover_type(std::string_view content_type)
     {
-        _require_value(content_type == "image/jpeg" || content_type == "image/png", "Cover image type is unsupported");
+        require_value(content_type == "image/jpeg" || content_type == "image/png", "Cover image type is unsupported");
         return std::string(content_type);
     }
 
-    struct _statement {
-        _statement(sqlite3* database, const char* sql)
+    struct statement {
+        statement(sqlite3* database, const char* sql)
             : _database(database)
         {
             const int _result = sqlite3_prepare_v2(database, sql, -1, &_handle, nullptr);
@@ -123,17 +123,17 @@ namespace {
             }
         }
 
-        ~_statement()
+        ~statement()
         {
             sqlite3_finalize(_handle);
         }
 
-        _statement(const _statement&) = delete;
-        _statement& operator=(const _statement&) = delete;
+        statement(const statement&) = delete;
+        statement& operator=(const statement&) = delete;
 
         void bind(int index, std::string_view value)
         {
-            _require_value(value.size() <= static_cast<std::size_t>((std::numeric_limits<int>::max)()), "Text value is too large for SQLite");
+            require_value(value.size() <= static_cast<std::size_t>((std::numeric_limits<int>::max)()), "Text value is too large for SQLite");
             _check(sqlite3_bind_text(_handle, index, value.data(), static_cast<int>(value.size()), SQLITE_TRANSIENT));
         }
 
@@ -149,7 +149,7 @@ namespace {
 
         void bind(int index, const std::vector<unsigned char>& value)
         {
-            _require_value(value.size() <= static_cast<std::size_t>((std::numeric_limits<int>::max)()), "Binary value is too large for SQLite");
+            require_value(value.size() <= static_cast<std::size_t>((std::numeric_limits<int>::max)()), "Binary value is too large for SQLite");
             _check(sqlite3_bind_blob(_handle, index, value.data(), static_cast<int>(value.size()), SQLITE_TRANSIENT));
         }
 
@@ -168,7 +168,7 @@ namespace {
 
         void execute()
         {
-            _require_value(!next(), "SQLite statement unexpectedly returned a row");
+            require_value(!next(), "SQLite statement unexpectedly returned a row");
         }
 
         void reset()
@@ -177,7 +177,7 @@ namespace {
             _check(sqlite3_clear_bindings(_handle));
         }
 
-        std::string text(int column) const
+        [[nodiscard]] std::string text(int column) const
         {
             const unsigned char* _value = sqlite3_column_text(_handle, column);
             if (_value == nullptr) {
@@ -187,12 +187,12 @@ namespace {
             return std::string(reinterpret_cast<const char*>(_value), static_cast<std::size_t>(_size));
         }
 
-        sqlite3_int64 integer(int column) const
+        [[nodiscard]] sqlite3_int64 integer(int column) const
         {
             return sqlite3_column_int64(_handle, column);
         }
 
-        std::vector<unsigned char> blob(int column) const
+        [[nodiscard]] std::vector<unsigned char> blob(int column) const
         {
             const void* _value = sqlite3_column_blob(_handle, column);
             const int _size = sqlite3_column_bytes(_handle, column);
@@ -215,7 +215,7 @@ namespace {
         sqlite3_stmt* _handle { nullptr };
     };
 
-    void _execute(sqlite3* database, const char* sql)
+    void execute(sqlite3* database, const char* sql)
     {
         char* _error = nullptr;
         const int _result = sqlite3_exec(database, sql, nullptr, nullptr, &_error);
@@ -226,14 +226,14 @@ namespace {
         }
     }
 
-    struct _transaction {
-        explicit _transaction(sqlite3* database)
+    struct transaction {
+        explicit transaction(sqlite3* database)
             : _database(database)
         {
-            _execute(_database, "BEGIN IMMEDIATE");
+            execute(_database, "BEGIN IMMEDIATE");
         }
 
-        ~_transaction()
+        ~transaction()
         {
             if (!_committed) {
                 sqlite3_exec(_database, "ROLLBACK", nullptr, nullptr, nullptr);
@@ -242,7 +242,7 @@ namespace {
 
         void commit()
         {
-            _execute(_database, "COMMIT");
+            execute(_database, "COMMIT");
             _committed = true;
         }
 
@@ -251,7 +251,7 @@ namespace {
         bool _committed { false };
     };
 
-    std::string _create_uuid()
+    [[nodiscard]] std::string create_uuid()
     {
         std::array<unsigned char, 16> _bytes { };
         std::random_device _random;
@@ -272,12 +272,12 @@ namespace {
         return _output.str();
     }
 
-    std::string _create_access_token()
+    [[nodiscard]] std::string create_access_token()
     {
-        return _create_uuid() + _create_uuid();
+        return create_uuid() + create_uuid();
     }
 
-    std::string _file_sha256(const std::filesystem::path& path)
+    [[nodiscard]] std::string file_sha256(const std::filesystem::path& path)
     {
         try {
             return file_fingerprint(path);
@@ -286,7 +286,7 @@ namespace {
         }
     }
 
-    std::string _data_sha256(const std::vector<unsigned char>& data)
+    [[nodiscard]] std::string data_sha256(const std::vector<unsigned char>& data)
     {
         try {
             return data_fingerprint(std::string_view(
@@ -297,7 +297,7 @@ namespace {
         }
     }
 
-    bool _same_track(const track& left, const track& right)
+    [[nodiscard]] bool is_same_track(const track& left, const track& right)
     {
         return std::tie(
                    left.id,
@@ -329,22 +329,22 @@ namespace {
                 right.size_bytes);
     }
 
-    bool _setting_bool(const std::optional<std::string>& value, bool fallback)
+    [[nodiscard]] bool is_setting_bool(const std::optional<std::string>& value, bool fallback)
     {
         if (!value) {
             return fallback;
         }
-        _require_value(*value == "0" || *value == "1", "Stored boolean setting is invalid");
+        require_value(*value == "0" || *value == "1", "Stored boolean setting is invalid");
         return *value == "1";
     }
 
-    struct _scanned_asset {
-        track _catalog_track;
-        file_location _file;
-        std::optional<cover_art> _cover;
+    struct scanned_asset {
+        track catalog_track;
+        file_location file;
+        std::optional<cover_art> cover;
     };
 
-    track _read_track(const _statement& query)
+    [[nodiscard]] track read_track(const statement& query)
     {
         return {
             query.text(0),
@@ -352,50 +352,50 @@ namespace {
             query.text(2),
             query.text(3),
             query.text(4),
-            _unsigned_integer(query.integer(5), "Cover size"),
-            _stored_extension(query.text(6)),
+            unsigned_integer(query.integer(5), "Cover size"),
+            stored_extension(query.text(6)),
             query.text(7),
             query.text(8),
             query.text(9),
-            _stored_track_number(query.integer(10)),
-            _unsigned_integer(query.integer(11), "Track duration"),
-            _unsigned_integer(query.integer(12), "Track size")
+            stored_track_number(query.integer(10)),
+            unsigned_integer(query.integer(11), "Track duration"),
+            unsigned_integer(query.integer(12), "Track size")
         };
     }
 
-    void _validate_track(const track& track)
+    void validate_track(const track& track)
     {
-        _require_value(!track.id.empty(), "Track ID cannot be empty");
-        _require_value(!track.catalog_id.empty(), "Track catalog ID cannot be empty");
-        _normalize_hash(track.file_hash);
+        require_value(!track.id.empty(), "Track ID cannot be empty");
+        require_value(!track.catalog_id.empty(), "Track catalog ID cannot be empty");
+        normalize_hash(track.file_hash);
         if (track.cover_hash.empty()) {
-            _require_value(track.cover_content_type.empty() && track.cover_size_bytes == 0, "Track cover fields are incomplete");
+            require_value(track.cover_content_type.empty() && track.cover_size_bytes == 0, "Track cover fields are incomplete");
         } else {
-            _normalize_hash(track.cover_hash);
-            _normalized_cover_type(track.cover_content_type);
-            _require_value(track.cover_size_bytes > 0 && track.cover_size_bytes <= _maximum_cover_size, "Track cover size is invalid");
+            normalize_hash(track.cover_hash);
+            normalized_cover_type(track.cover_content_type);
+            require_value(track.cover_size_bytes > 0 && track.cover_size_bytes <= maximum_cover_size, "Track cover size is invalid");
         }
-        _normalized_extension(track.extension);
-        _sqlite_integer(track.track_number, "Track number");
-        _sqlite_integer(track.duration_ms, "Track duration");
-        _sqlite_integer(track.size_bytes, "Track size");
+        normalized_extension(track.extension);
+        sqlite_integer(track.track_number, "Track number");
+        sqlite_integer(track.duration_ms, "Track duration");
+        sqlite_integer(track.size_bytes, "Track size");
     }
 
-    void _bind_track(_statement& statement, const track& track)
+    void bind_track(statement& statement, const track& track)
     {
         statement.bind(1, track.id);
         statement.bind(2, track.catalog_id);
-        statement.bind(3, _normalize_hash(track.file_hash));
+        statement.bind(3, normalize_hash(track.file_hash));
         statement.bind(4, track.cover_hash);
         statement.bind(5, track.cover_content_type);
-        statement.bind(6, _sqlite_integer(track.cover_size_bytes, "Cover size"));
-        statement.bind(7, _normalized_extension(track.extension));
+        statement.bind(6, sqlite_integer(track.cover_size_bytes, "Cover size"));
+        statement.bind(7, normalized_extension(track.extension));
         statement.bind(8, track.title);
         statement.bind(9, track.artist);
         statement.bind(10, track.album);
-        statement.bind(11, _sqlite_integer(track.track_number, "Track number"));
-        statement.bind(12, _sqlite_integer(track.duration_ms, "Track duration"));
-        statement.bind(13, _sqlite_integer(track.size_bytes, "Track size"));
+        statement.bind(11, sqlite_integer(track.track_number, "Track number"));
+        statement.bind(12, sqlite_integer(track.duration_ms, "Track duration"));
+        statement.bind(13, sqlite_integer(track.size_bytes, "Track size"));
     }
 
 }
@@ -405,8 +405,8 @@ struct storage::implementation {
         : _database_path(std::move(requested_database_path))
         , _asset_directory(std::move(requested_asset_directory))
     {
-        _require_value(!_database_path.empty(), "Database path cannot be empty");
-        _require_value(!_asset_directory.empty(), "Asset directory cannot be empty");
+        require_value(!_database_path.empty(), "Database path cannot be empty");
+        require_value(!_asset_directory.empty(), "Asset directory cannot be empty");
 
         std::error_code _filesystem_error;
         const std::filesystem::path _database_parent = _database_path.parent_path();
@@ -422,7 +422,7 @@ struct storage::implementation {
         }
 
         sqlite3* _opened_database = nullptr;
-        const int _result = sqlite3_open_v2(_path_string(_database_path).c_str(), &_opened_database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
+        const int _result = sqlite3_open_v2(path_string(_database_path).c_str(), &_opened_database, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
         _database = _opened_database;
         if (_result != SQLITE_OK) {
             const std::string _message = _database != nullptr ? sqlite3_errmsg(_database) : "unknown error";
@@ -433,9 +433,9 @@ struct storage::implementation {
 
         try {
             sqlite3_busy_timeout(_database, 5000);
-            _execute(_database, "PRAGMA foreign_keys = ON");
-            _execute(_database, "PRAGMA journal_mode = WAL");
-            _execute(_database, "PRAGMA synchronous = NORMAL");
+            execute(_database, "PRAGMA foreign_keys = ON");
+            execute(_database, "PRAGMA journal_mode = WAL");
+            execute(_database, "PRAGMA synchronous = NORMAL");
             initialize_schema();
             ensure_identity();
         } catch (...) {
@@ -454,15 +454,15 @@ struct storage::implementation {
     {
         int _version = 0;
         {
-            _statement _version_query(_database, "PRAGMA user_version");
-            _require_value(_version_query.next(), "Could not read SQLite schema version");
+            statement _version_query(_database, "PRAGMA user_version");
+            require_value(_version_query.next(), "Could not read SQLite schema version");
             _version = static_cast<int>(_version_query.integer(0));
         }
-        _require_value(_version == 0 || _version == _schema_version, "Soundstep's development database schema changed; remove soundstep.db and restart");
+        require_value(_version == 0 || _version == schema_version, "Soundstep's development database schema changed; remove soundstep.db and restart");
 
         if (_version == 0) {
-            _transaction _creation(_database);
-            _execute(_database, R"sql(
+            transaction _creation(_database);
+            execute(_database, R"sql(
                 CREATE TABLE settings (
                     key TEXT PRIMARY KEY,
                     value TEXT NOT NULL
@@ -561,7 +561,7 @@ struct storage::implementation {
 
     std::optional<std::string> setting(std::string_view key) const
     {
-        _statement _query(_database, "SELECT value FROM settings WHERE key = ?1");
+        statement _query(_database, "SELECT value FROM settings WHERE key = ?1");
         _query.bind(1, key);
         if (!_query.next()) {
             return std::nullopt;
@@ -571,7 +571,7 @@ struct storage::implementation {
 
     void write_setting(std::string_view key, std::string_view value)
     {
-        _statement _query(_database, R"sql(
+        statement _query(_database, R"sql(
             INSERT INTO settings(key, value) VALUES(?1, ?2)
             ON CONFLICT(key) DO UPDATE SET value = excluded.value
         )sql");
@@ -583,18 +583,18 @@ struct storage::implementation {
     void ensure_identity()
     {
         if (!setting("instance_id")) {
-            write_setting("instance_id", _create_uuid());
+            write_setting("instance_id", create_uuid());
         }
         if (!setting("instance_name")) {
             write_setting("instance_name", "Soundstep");
         }
         if (!setting("lan_token")) {
-            write_setting("lan_token", _create_access_token());
+            write_setting("lan_token", create_access_token());
         }
 
         const std::string _id = *setting("instance_id");
         const std::string _name = *setting("instance_name");
-        _statement _catalog(_database, R"sql(
+        statement _catalog(_database, R"sql(
             INSERT INTO catalogs(id, owner_instance_id, name, revision)
             VALUES(?1, ?1, ?2, 0)
             ON CONFLICT(id) DO UPDATE SET
@@ -624,7 +624,7 @@ instance_info storage::instance() const
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
     const std::optional<std::string> _id = _implementation->setting("instance_id");
     const std::optional<std::string> _name = _implementation->setting("instance_name");
-    _require_value(_id.has_value() && _name.has_value(), "Storage instance identity is missing");
+    require_value(_id.has_value() && _name.has_value(), "Storage instance identity is missing");
     return { *_id, *_name };
 }
 
@@ -632,17 +632,17 @@ std::string storage::lan_token() const
 {
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
     const std::optional<std::string> _token = _implementation->setting("lan_token");
-    _require_value(_token.has_value() && !_token->empty(), "Storage LAN token is missing");
+    require_value(_token.has_value() && !_token->empty(), "Storage LAN token is missing");
     return *_token;
 }
 
 std::string storage::create_invitation_token()
 {
-    const std::string _token = _create_access_token();
+    const std::string _token = create_access_token();
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
-    _execute(_implementation->_database, "DELETE FROM access_grants WHERE peer_id IS NULL");
-    _statement _insert(_implementation->_database, "INSERT INTO access_grants(token, peer_id) VALUES(?1, NULL)");
+    transaction _update(_implementation->_database);
+    execute(_implementation->_database, "DELETE FROM access_grants WHERE peer_id IS NULL");
+    statement _insert(_implementation->_database, "INSERT INTO access_grants(token, peer_id) VALUES(?1, NULL)");
     _insert.bind(1, _token);
     _insert.execute();
     _update.commit();
@@ -651,16 +651,16 @@ std::string storage::create_invitation_token()
 
 std::string storage::access_token_for_peer(std::string_view peer_id)
 {
-    _require_value(!peer_id.empty(), "Peer ID cannot be empty");
+    require_value(!peer_id.empty(), "Peer ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _existing(_implementation->_database, "SELECT token FROM access_grants WHERE peer_id = ?1");
+    statement _existing(_implementation->_database, "SELECT token FROM access_grants WHERE peer_id = ?1");
     _existing.bind(1, peer_id);
     if (_existing.next()) {
         return _existing.text(0);
     }
 
-    const std::string _token = _create_access_token();
-    _statement _insert(_implementation->_database, "INSERT INTO access_grants(token, peer_id) VALUES(?1, ?2)");
+    const std::string _token = create_access_token();
+    statement _insert(_implementation->_database, "INSERT INTO access_grants(token, peer_id) VALUES(?1, ?2)");
     _insert.bind(1, _token);
     _insert.bind(2, peer_id);
     _insert.execute();
@@ -677,29 +677,29 @@ bool storage::authorize_access(std::string_view token) const
     if (_lan && token == *_lan) {
         return true;
     }
-    _statement _query(_implementation->_database, "SELECT 1 FROM access_grants WHERE token = ?1");
+    statement _query(_implementation->_database, "SELECT 1 FROM access_grants WHERE token = ?1");
     _query.bind(1, token);
     return _query.next();
 }
 
 void storage::claim_invitation(std::string_view token, std::string_view peer_id)
 {
-    _require_value(!token.empty(), "Invitation token cannot be empty");
-    _require_value(!peer_id.empty(), "Peer ID cannot be empty");
+    require_value(!token.empty(), "Invitation token cannot be empty");
+    require_value(!peer_id.empty(), "Peer ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, "SELECT peer_id FROM access_grants WHERE token = ?1");
+    statement _query(_implementation->_database, "SELECT peer_id FROM access_grants WHERE token = ?1");
     _query.bind(1, token);
-    _require_value(_query.next(), "Invitation token is invalid or revoked");
+    require_value(_query.next(), "Invitation token is invalid or revoked");
     const std::string _claimed = _query.text(0);
-    _require_value(_claimed.empty() || _claimed == peer_id, "Invitation token was already claimed by another instance");
+    require_value(_claimed.empty() || _claimed == peer_id, "Invitation token was already claimed by another instance");
     if (!_claimed.empty()) {
         return;
     }
-    _statement _claim(_implementation->_database, "UPDATE access_grants SET peer_id = ?2 WHERE token = ?1 AND peer_id IS NULL");
+    statement _claim(_implementation->_database, "UPDATE access_grants SET peer_id = ?2 WHERE token = ?1 AND peer_id IS NULL");
     _claim.bind(1, token);
     _claim.bind(2, peer_id);
     _claim.execute();
-    _require_value(sqlite3_changes(_implementation->_database) == 1, "Invitation token could not be claimed");
+    require_value(sqlite3_changes(_implementation->_database) == 1, "Invitation token could not be claimed");
 }
 
 std::optional<soundstep::transport_identity> storage::transport_identity() const
@@ -711,20 +711,20 @@ std::optional<soundstep::transport_identity> storage::transport_identity() const
     if (!_certificate && !_private_key && !_fingerprint) {
         return std::nullopt;
     }
-    _require_value(_certificate && !_certificate->empty() && _private_key && !_private_key->empty() && _fingerprint && _fingerprint->size() == 64, "Stored transport identity is incomplete");
-    _require_value(transport_certificate_fingerprint(*_certificate) == *_fingerprint, "Stored transport certificate fingerprint does not match");
+    require_value(_certificate && !_certificate->empty() && _private_key && !_private_key->empty() && _fingerprint && _fingerprint->size() == 64, "Stored transport identity is incomplete");
+    require_value(transport_certificate_fingerprint(*_certificate) == *_fingerprint, "Stored transport certificate fingerprint does not match");
     return soundstep::transport_identity { *_certificate, *_private_key, *_fingerprint };
 }
 
 void storage::set_transport_identity(const soundstep::transport_identity& identity)
 {
-    _require_value(!identity.certificate_pem.empty(), "Transport certificate cannot be empty");
-    _require_value(!identity.private_key_pem.empty(), "Transport private key cannot be empty");
-    _require_value(identity.fingerprint.size() == 64, "Transport fingerprint must contain 64 hexadecimal characters");
-    _require_value(transport_certificate_fingerprint(identity.certificate_pem) == identity.fingerprint, "Transport certificate fingerprint does not match");
+    require_value(!identity.certificate_pem.empty(), "Transport certificate cannot be empty");
+    require_value(!identity.private_key_pem.empty(), "Transport private key cannot be empty");
+    require_value(identity.fingerprint.size() == 64, "Transport fingerprint must contain 64 hexadecimal characters");
+    require_value(transport_certificate_fingerprint(identity.certificate_pem) == identity.fingerprint, "Transport certificate fingerprint does not match");
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
+    transaction _update(_implementation->_database);
     _implementation->write_setting("transport_certificate", identity.certificate_pem);
     _implementation->write_setting("transport_private_key", identity.private_key_pem);
     _implementation->write_setting("transport_fingerprint", identity.fingerprint);
@@ -733,17 +733,17 @@ void storage::set_transport_identity(const soundstep::transport_identity& identi
 
 void storage::set_instance_name(std::string name)
 {
-    _require_value(!name.empty(), "Instance name cannot be empty");
+    require_value(!name.empty(), "Instance name cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
+    transaction _update(_implementation->_database);
     _implementation->write_setting("instance_name", name);
 
     const std::string _id = *_implementation->setting("instance_id");
-    _statement _rename_catalog(_implementation->_database, "UPDATE catalogs SET name = ?2, revision = revision + 1 WHERE id = ?1");
+    statement _rename_catalog(_implementation->_database, "UPDATE catalogs SET name = ?2, revision = revision + 1 WHERE id = ?1");
     _rename_catalog.bind(1, _id);
     _rename_catalog.bind(2, name);
     _rename_catalog.execute();
-    _require_value(sqlite3_changes(_implementation->_database) == 1, "Local catalog was not found");
+    require_value(sqlite3_changes(_implementation->_database) == 1, "Local catalog was not found");
     _update.commit();
 }
 
@@ -753,16 +753,16 @@ configuration storage::config() const
     const std::optional<std::string> _path = _implementation->setting("library_path");
     return {
         _path ? std::filesystem::u8path(*_path) : std::filesystem::path { },
-        _setting_bool(_implementation->setting("scan_subdirectories"), true),
-        _setting_bool(_implementation->setting("scan_on_startup"), true),
-        _setting_bool(_implementation->setting("lan_discovery_enabled"), true)
+        is_setting_bool(_implementation->setting("scan_subdirectories"), true),
+        is_setting_bool(_implementation->setting("scan_on_startup"), true),
+        is_setting_bool(_implementation->setting("lan_discovery_enabled"), true)
     };
 }
 
 void storage::set_config(const configuration& config)
 {
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
+    transaction _update(_implementation->_database);
     _implementation->write_setting("library_path", config.library_path.u8string());
     _implementation->write_setting("scan_subdirectories", config.scan_subdirectories ? "1" : "0");
     _implementation->write_setting("scan_on_startup", config.scan_on_startup ? "1" : "0");
@@ -779,7 +779,7 @@ std::optional<track> storage::playback_selection() const
         return std::nullopt;
     }
 
-    _statement _query(_implementation->_database, R"sql(
+    statement _query(_implementation->_database, R"sql(
         SELECT id, catalog_id, file_hash, cover_hash, cover_content_type, cover_size,
                extension, title, artist, album, track_number, duration_ms, size
         FROM tracks
@@ -790,23 +790,23 @@ std::optional<track> storage::playback_selection() const
     if (!_query.next()) {
         return std::nullopt;
     }
-    return _read_track(_query);
+    return read_track(_query);
 }
 
 void storage::set_playback_selection(const track& selected_track)
 {
-    _require_value(!selected_track.catalog_id.empty(), "Selected track catalog ID cannot be empty");
-    _require_value(!selected_track.id.empty(), "Selected track ID cannot be empty");
+    require_value(!selected_track.catalog_id.empty(), "Selected track catalog ID cannot be empty");
+    require_value(!selected_track.id.empty(), "Selected track ID cannot be empty");
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
     {
-        _statement _existing(_implementation->_database, "SELECT 1 FROM tracks WHERE catalog_id = ?1 AND id = ?2");
+        statement _existing(_implementation->_database, "SELECT 1 FROM tracks WHERE catalog_id = ?1 AND id = ?2");
         _existing.bind(1, selected_track.catalog_id);
         _existing.bind(2, selected_track.id);
-        _require_value(_existing.next(), "Selected track was not found");
+        require_value(_existing.next(), "Selected track was not found");
     }
 
-    _transaction _update(_implementation->_database);
+    transaction _update(_implementation->_database);
     _implementation->write_setting("playback_catalog_id", selected_track.catalog_id);
     _implementation->write_setting("playback_track_id", selected_track.id);
     _update.commit();
@@ -815,7 +815,7 @@ void storage::set_playback_selection(const track& selected_track)
 std::vector<peer_record> storage::peers() const
 {
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, R"sql(
+    statement _query(_implementation->_database, R"sql(
         SELECT p.id, p.name, p.token, p.fingerprint, p.origin, p.last_seen_ms,
                p.library_enabled,
                e.host, e.port, e.family, e.last_seen_ms, e.last_success_ms
@@ -827,9 +827,9 @@ std::vector<peer_record> storage::peers() const
     std::vector<peer_record> _result;
     while (_query.next()) {
         const sqlite3_int64 _origin = _query.integer(4);
-        _require_value(_origin == 0 || _origin == 1, "Stored peer origin is invalid");
+        require_value(_origin == 0 || _origin == 1, "Stored peer origin is invalid");
         const sqlite3_int64 _library_enabled = _query.integer(6);
-        _require_value(_library_enabled == 0 || _library_enabled == 1, "Stored peer library visibility is invalid");
+        require_value(_library_enabled == 0 || _library_enabled == 1, "Stored peer library visibility is invalid");
         const std::string _id = _query.text(0);
         if (_result.empty() || _result.back().id != _id) {
             _result.push_back({ _id,
@@ -837,7 +837,7 @@ std::vector<peer_record> storage::peers() const
                 _query.text(2),
                 _query.text(3),
                 static_cast<peer_origin>(_origin),
-                _unsigned_integer(_query.integer(5), "Peer last-seen time"),
+                unsigned_integer(_query.integer(5), "Peer last-seen time"),
                 _library_enabled != 0,
                 { } });
         }
@@ -846,13 +846,13 @@ std::vector<peer_record> storage::peers() const
         if (!_host.empty()) {
             const sqlite3_int64 _port = _query.integer(8);
             const sqlite3_int64 _family = _query.integer(9);
-            _require_value(_port > 0 && _port <= 65'535, "Stored peer endpoint port is invalid");
-            _require_value(_family == 0 || _family == 1, "Stored peer endpoint family is invalid");
+            require_value(_port > 0 && _port <= 65'535, "Stored peer endpoint port is invalid");
+            require_value(_family == 0 || _family == 1, "Stored peer endpoint family is invalid");
             _result.back().endpoints.push_back({ _host,
                 static_cast<std::uint16_t>(_port),
                 static_cast<peer_endpoint_family>(_family),
-                _unsigned_integer(_query.integer(10), "Peer endpoint last-seen time"),
-                _unsigned_integer(_query.integer(11), "Peer endpoint last-success time") });
+                unsigned_integer(_query.integer(10), "Peer endpoint last-seen time"),
+                unsigned_integer(_query.integer(11), "Peer endpoint last-success time") });
         }
     }
     return _result;
@@ -860,25 +860,25 @@ std::vector<peer_record> storage::peers() const
 
 void storage::upsert_peer(const peer_record& peer)
 {
-    _require_value(!peer.id.empty(), "Peer ID cannot be empty");
-    _require_value(!peer.name.empty(), "Peer name cannot be empty");
-    _require_value(!peer.token.empty(), "Peer token cannot be empty");
-    const std::string _fingerprint = _normalize_fingerprint(peer.fingerprint);
-    _require_value(peer.origin == peer_origin::lan || peer.origin == peer_origin::pairing_code, "Peer origin is invalid");
+    require_value(!peer.id.empty(), "Peer ID cannot be empty");
+    require_value(!peer.name.empty(), "Peer name cannot be empty");
+    require_value(!peer.token.empty(), "Peer token cannot be empty");
+    const std::string _fingerprint = normalize_fingerprint(peer.fingerprint);
+    require_value(peer.origin == peer_origin::lan || peer.origin == peer_origin::pairing_code, "Peer origin is invalid");
     for (const peer_endpoint& _endpoint : peer.endpoints) {
-        _require_value(!_endpoint.host.empty(), "Peer endpoint host cannot be empty");
-        _require_value(_endpoint.port != 0, "Peer endpoint port cannot be zero");
-        _require_value(_endpoint.family == peer_endpoint_family::ipv4 || _endpoint.family == peer_endpoint_family::ipv6, "Peer endpoint family is invalid");
-        _sqlite_integer(_endpoint.last_seen_ms, "Peer endpoint last-seen time");
-        _sqlite_integer(_endpoint.last_success_ms, "Peer endpoint last-success time");
+        require_value(!_endpoint.host.empty(), "Peer endpoint host cannot be empty");
+        require_value(_endpoint.port != 0, "Peer endpoint port cannot be zero");
+        require_value(_endpoint.family == peer_endpoint_family::ipv4 || _endpoint.family == peer_endpoint_family::ipv6, "Peer endpoint family is invalid");
+        sqlite_integer(_endpoint.last_seen_ms, "Peer endpoint last-seen time");
+        sqlite_integer(_endpoint.last_success_ms, "Peer endpoint last-success time");
     }
 
     const instance_info _local = instance();
-    _require_value(peer.id != _local.id, "The local instance cannot be stored as a peer");
+    require_value(peer.id != _local.id, "The local instance cannot be stored as a peer");
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
-    _statement _upsert(_implementation->_database, R"sql(
+    transaction _update(_implementation->_database);
+    statement _upsert(_implementation->_database, R"sql(
         INSERT INTO peers(id, name, token, fingerprint, origin, last_seen_ms, library_enabled)
         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)
         ON CONFLICT(id) DO UPDATE SET
@@ -896,15 +896,15 @@ void storage::upsert_peer(const peer_record& peer)
     _upsert.bind(3, peer.token);
     _upsert.bind(4, _fingerprint);
     _upsert.bind(5, static_cast<sqlite3_int64>(peer.origin));
-    _upsert.bind(6, _sqlite_integer(peer.last_seen_ms, "Peer last-seen time"));
+    _upsert.bind(6, sqlite_integer(peer.last_seen_ms, "Peer last-seen time"));
     _upsert.bind(7, peer.library_enabled);
     _upsert.execute();
 
-    _statement _remove_endpoints(_implementation->_database, "DELETE FROM peer_endpoints WHERE peer_id = ?1");
+    statement _remove_endpoints(_implementation->_database, "DELETE FROM peer_endpoints WHERE peer_id = ?1");
     _remove_endpoints.bind(1, peer.id);
     _remove_endpoints.execute();
 
-    _statement _insert_endpoint(_implementation->_database, R"sql(
+    statement _insert_endpoint(_implementation->_database, R"sql(
         INSERT INTO peer_endpoints(
             peer_id, host, port, family, last_seen_ms, last_success_ms)
         VALUES(?1, ?2, ?3, ?4, ?5, ?6)
@@ -918,8 +918,8 @@ void storage::upsert_peer(const peer_record& peer)
         _insert_endpoint.bind(2, _endpoint.host);
         _insert_endpoint.bind(3, static_cast<sqlite3_int64>(_endpoint.port));
         _insert_endpoint.bind(4, static_cast<sqlite3_int64>(_endpoint.family));
-        _insert_endpoint.bind(5, _sqlite_integer(_endpoint.last_seen_ms, "Peer endpoint last-seen time"));
-        _insert_endpoint.bind(6, _sqlite_integer(_endpoint.last_success_ms, "Peer endpoint last-success time"));
+        _insert_endpoint.bind(5, sqlite_integer(_endpoint.last_seen_ms, "Peer endpoint last-seen time"));
+        _insert_endpoint.bind(6, sqlite_integer(_endpoint.last_success_ms, "Peer endpoint last-success time"));
         _insert_endpoint.execute();
         _insert_endpoint.reset();
     }
@@ -928,13 +928,13 @@ void storage::upsert_peer(const peer_record& peer)
 
 void storage::mark_peer_endpoint_success(std::string_view id, const peer_endpoint& endpoint)
 {
-    _require_value(!id.empty(), "Peer ID cannot be empty");
-    _require_value(!endpoint.host.empty(), "Peer endpoint host cannot be empty");
-    _require_value(endpoint.port != 0, "Peer endpoint port cannot be zero");
+    require_value(!id.empty(), "Peer ID cannot be empty");
+    require_value(!endpoint.host.empty(), "Peer endpoint host cannot be empty");
+    require_value(endpoint.port != 0, "Peer endpoint port cannot be zero");
 
     const std::uint64_t _now = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count());
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _update(_implementation->_database, R"sql(
+    statement _update(_implementation->_database, R"sql(
         UPDATE peer_endpoints
         SET last_seen_ms = max(last_seen_ms, ?4),
             last_success_ms = max(last_success_ms, ?4)
@@ -943,31 +943,31 @@ void storage::mark_peer_endpoint_success(std::string_view id, const peer_endpoin
     _update.bind(1, id);
     _update.bind(2, endpoint.host);
     _update.bind(3, static_cast<sqlite3_int64>(endpoint.port));
-    _update.bind(4, _sqlite_integer(_now, "Peer endpoint success time"));
+    _update.bind(4, sqlite_integer(_now, "Peer endpoint success time"));
     _update.execute();
 }
 
 void storage::set_peer_library_enabled(std::string_view id, bool enabled)
 {
-    _require_value(!id.empty(), "Peer ID cannot be empty");
+    require_value(!id.empty(), "Peer ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _update(_implementation->_database, "UPDATE peers SET library_enabled = ?2 WHERE id = ?1");
+    statement _update(_implementation->_database, "UPDATE peers SET library_enabled = ?2 WHERE id = ?1");
     _update.bind(1, id);
     _update.bind(2, enabled);
     _update.execute();
-    _require_value(sqlite3_changes(_implementation->_database) == 1, "Peer was not found");
+    require_value(sqlite3_changes(_implementation->_database) == 1, "Peer was not found");
 }
 
 void storage::remove_peer(std::string_view id)
 {
-    _require_value(!id.empty(), "Peer ID cannot be empty");
+    require_value(!id.empty(), "Peer ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
-    _statement _remove_catalog(_implementation->_database, "DELETE FROM catalogs WHERE id = ?1 AND owner_instance_id = ?1");
+    transaction _update(_implementation->_database);
+    statement _remove_catalog(_implementation->_database, "DELETE FROM catalogs WHERE id = ?1 AND owner_instance_id = ?1");
     _remove_catalog.bind(1, id);
     _remove_catalog.execute();
 
-    _statement _remove_peer(_implementation->_database, "DELETE FROM peers WHERE id = ?1");
+    statement _remove_peer(_implementation->_database, "DELETE FROM peers WHERE id = ?1");
     _remove_peer.bind(1, id);
     _remove_peer.execute();
     _update.commit();
@@ -976,14 +976,14 @@ void storage::remove_peer(std::string_view id)
 library_scan_result storage::scan_library()
 {
     const configuration _settings = config();
-    _require_value(!_settings.library_path.empty(), "A music folder must be configured before scanning");
+    require_value(!_settings.library_path.empty(), "A music folder must be configured before scanning");
 
     std::error_code _filesystem_error;
     const std::filesystem::path _root = std::filesystem::weakly_canonical(_settings.library_path, _filesystem_error);
-    _require_value(!_filesystem_error && std::filesystem::is_directory(_root, _filesystem_error) && !_filesystem_error, "The configured music folder does not exist or is not accessible");
+    require_value(!_filesystem_error && std::filesystem::is_directory(_root, _filesystem_error) && !_filesystem_error, "The configured music folder does not exist or is not accessible");
 
     library_scan_result _result;
-    std::map<std::string, _scanned_asset> _assets;
+    std::map<std::string, scanned_asset> _assets;
     const instance_info _local_instance = instance();
 
     const std::function<void(const std::filesystem::directory_entry&)> _inspect = [&](const std::filesystem::directory_entry& entry) {
@@ -1005,17 +1005,17 @@ library_scan_result storage::scan_library()
         }
 
         try {
-            const std::string _hash = _file_sha256(entry.path());
+            const std::string _hash = file_sha256(entry.path());
             const audio_metadata _metadata = inspect_audio_file(entry.path(), *_extension);
             std::optional<cover_art> _cover;
             if (!_metadata.cover_bytes.empty()) {
                 _cover = cover_art {
-                    _data_sha256(_metadata.cover_bytes),
+                    data_sha256(_metadata.cover_bytes),
                     _metadata.cover_content_type,
                     _metadata.cover_bytes
                 };
             }
-            _scanned_asset _asset {
+            scanned_asset _asset {
                 { _hash,
                     _local_instance.id,
                     _hash,
@@ -1037,8 +1037,8 @@ library_scan_result storage::scan_library()
                 std::move(_cover)
             };
 
-            const std::map<std::string, _scanned_asset>::iterator _existing = _assets.find(_hash);
-            if (_existing == _assets.end() || _asset._file.path < _existing->second._file.path) {
+            const std::map<std::string, scanned_asset>::iterator _existing = _assets.find(_hash);
+            if (_existing == _assets.end() || _asset.file.path < _existing->second.file.path) {
                 _assets.insert_or_assign(_hash, std::move(_asset));
             }
         } catch (...) {
@@ -1050,7 +1050,7 @@ library_scan_result storage::scan_library()
     if (_settings.scan_subdirectories) {
         std::filesystem::recursive_directory_iterator _iterator(_root, _options, _filesystem_error);
         const std::filesystem::recursive_directory_iterator _end;
-        _require_value(!_filesystem_error, "Could not read the configured music folder");
+        require_value(!_filesystem_error, "Could not read the configured music folder");
         while (_iterator != _end) {
             _inspect(*_iterator);
             _iterator.increment(_filesystem_error);
@@ -1062,7 +1062,7 @@ library_scan_result storage::scan_library()
     } else {
         std::filesystem::directory_iterator _iterator(_root, _options, _filesystem_error);
         const std::filesystem::directory_iterator _end;
-        _require_value(!_filesystem_error, "Could not read the configured music folder");
+        require_value(!_filesystem_error, "Could not read the configured music folder");
         while (_iterator != _end) {
             _inspect(*_iterator);
             _iterator.increment(_filesystem_error);
@@ -1074,10 +1074,10 @@ library_scan_result storage::scan_library()
     }
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
+    transaction _update(_implementation->_database);
 
     std::map<std::string, track> _previous_tracks;
-    _statement _previous(_implementation->_database, R"sql(
+    statement _previous(_implementation->_database, R"sql(
         SELECT id, catalog_id, file_hash, cover_hash, cover_content_type, cover_size,
                extension, title, artist, album, track_number, duration_ms, size
         FROM tracks
@@ -1085,12 +1085,12 @@ library_scan_result storage::scan_library()
     )sql");
     _previous.bind(1, _local_instance.id);
     while (_previous.next()) {
-        track _value = _read_track(_previous);
+        track _value = read_track(_previous);
         _previous_tracks.emplace(_value.id, std::move(_value));
     }
 
     if (_result.files_failed != 0) {
-        _statement _previous_file(_implementation->_database, "SELECT locator, extension, kind, size FROM files WHERE hash = ?1");
+        statement _previous_file(_implementation->_database, "SELECT locator, extension, kind, size FROM files WHERE hash = ?1");
         for (const std::pair<const std::string, track>& _item : _previous_tracks) {
             if (_assets.find(_item.first) != _assets.end()) {
                 continue;
@@ -1098,35 +1098,35 @@ library_scan_result storage::scan_library()
 
             _previous_file.bind(1, _item.second.file_hash);
             if (_previous_file.next()) {
-                _assets.emplace(_item.first, _scanned_asset { _item.second, { _item.second.file_hash, _previous_file.text(0), _stored_extension(_previous_file.text(1)), static_cast<file_kind>(_previous_file.integer(2)), _unsigned_integer(_previous_file.integer(3), "File size") }, std::nullopt });
+                _assets.emplace(_item.first, scanned_asset { _item.second, { _item.second.file_hash, _previous_file.text(0), stored_extension(_previous_file.text(1)), static_cast<file_kind>(_previous_file.integer(2)), unsigned_integer(_previous_file.integer(3), "File size") }, std::nullopt });
             }
             _previous_file.reset();
         }
     }
 
     bool _catalog_changed = _previous_tracks.size() != _assets.size();
-    for (const std::pair<const std::string, _scanned_asset>& _item : _assets) {
+    for (const std::pair<const std::string, scanned_asset>& _item : _assets) {
         const std::map<std::string, track>::iterator _previous_track = _previous_tracks.find(_item.first);
         if (_previous_track == _previous_tracks.end()) {
             ++_result.tracks_added;
             _catalog_changed = true;
-        } else if (!_same_track(_previous_track->second, _item.second._catalog_track)) {
+        } else if (!is_same_track(_previous_track->second, _item.second.catalog_track)) {
             _catalog_changed = true;
         }
     }
 
-    _statement _upsert_cover(_implementation->_database, R"sql(
+    statement _upsert_cover(_implementation->_database, R"sql(
         INSERT INTO covers(hash, content_type, data)
         VALUES(?1, ?2, ?3)
         ON CONFLICT(hash) DO NOTHING
     )sql");
-    for (const std::pair<const std::string, _scanned_asset>& _item : _assets) {
-        if (!_item.second._cover) {
+    for (const std::pair<const std::string, scanned_asset>& _item : _assets) {
+        if (!_item.second.cover) {
             continue;
         }
-        _upsert_cover.bind(1, _item.second._cover->hash);
-        _upsert_cover.bind(2, _item.second._cover->content_type);
-        _upsert_cover.bind(3, _item.second._cover->bytes);
+        _upsert_cover.bind(1, _item.second.cover->hash);
+        _upsert_cover.bind(2, _item.second.cover->content_type);
+        _upsert_cover.bind(3, _item.second.cover->bytes);
         _upsert_cover.execute();
         _upsert_cover.reset();
     }
@@ -1136,7 +1136,7 @@ library_scan_result storage::scan_library()
         }
     }
 
-    _statement _upsert_file(_implementation->_database, R"sql(
+    statement _upsert_file(_implementation->_database, R"sql(
         INSERT INTO files(hash, locator, extension, kind, size)
         VALUES(?1, ?2, ?3, 0, ?4)
         ON CONFLICT(hash) DO UPDATE SET
@@ -1145,45 +1145,45 @@ library_scan_result storage::scan_library()
             size = excluded.size
         WHERE files.kind = 0
     )sql");
-    for (const std::pair<const std::string, _scanned_asset>& _item : _assets) {
-        _upsert_file.bind(1, _item.second._file.hash);
-        _upsert_file.bind(2, _item.second._file.path);
-        _upsert_file.bind(3, _normalized_extension(_item.second._file.extension));
-        _upsert_file.bind(4, _sqlite_integer(_item.second._file.size_bytes, "File size"));
+    for (const std::pair<const std::string, scanned_asset>& _item : _assets) {
+        _upsert_file.bind(1, _item.second.file.hash);
+        _upsert_file.bind(2, _item.second.file.path);
+        _upsert_file.bind(3, normalized_extension(_item.second.file.extension));
+        _upsert_file.bind(4, sqlite_integer(_item.second.file.size_bytes, "File size"));
         _upsert_file.execute();
         _upsert_file.reset();
     }
 
     if (_catalog_changed) {
-        _statement _clear_tracks(_implementation->_database, "DELETE FROM tracks WHERE catalog_id = ?1");
+        statement _clear_tracks(_implementation->_database, "DELETE FROM tracks WHERE catalog_id = ?1");
         _clear_tracks.bind(1, _local_instance.id);
         _clear_tracks.execute();
 
-        _statement _insert_track(_implementation->_database, R"sql(
+        statement _insert_track(_implementation->_database, R"sql(
             INSERT INTO tracks(
                 id, catalog_id, file_hash, cover_hash, cover_content_type, cover_size,
                 extension, title, artist, album, track_number, duration_ms, size)
             VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
         )sql");
-        for (const std::pair<const std::string, _scanned_asset>& _item : _assets) {
-            const track& _value = _item.second._catalog_track;
-            _bind_track(_insert_track, _value);
+        for (const std::pair<const std::string, scanned_asset>& _item : _assets) {
+            const track& _value = _item.second.catalog_track;
+            bind_track(_insert_track, _value);
             _insert_track.execute();
             _insert_track.reset();
         }
 
-        _statement _revise(_implementation->_database, "UPDATE catalogs SET revision = revision + 1 WHERE id = ?1");
+        statement _revise(_implementation->_database, "UPDATE catalogs SET revision = revision + 1 WHERE id = ?1");
         _revise.bind(1, _local_instance.id);
         _revise.execute();
-        _require_value(sqlite3_changes(_implementation->_database) == 1, "Local catalog was not found");
+        require_value(sqlite3_changes(_implementation->_database) == 1, "Local catalog was not found");
     }
 
-    _execute(_implementation->_database, R"sql(
+    execute(_implementation->_database, R"sql(
         DELETE FROM files
         WHERE kind = 0
           AND NOT EXISTS (SELECT 1 FROM tracks WHERE tracks.file_hash = files.hash)
     )sql");
-    _execute(_implementation->_database, R"sql(
+    execute(_implementation->_database, R"sql(
         DELETE FROM covers
         WHERE NOT EXISTS (SELECT 1 FROM tracks WHERE tracks.cover_hash = covers.hash)
     )sql");
@@ -1193,22 +1193,22 @@ library_scan_result storage::scan_library()
 
 std::optional<std::uint64_t> storage::catalog_revision(std::string_view id) const
 {
-    _require_value(!id.empty(), "Catalog ID cannot be empty");
+    require_value(!id.empty(), "Catalog ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, "SELECT revision FROM catalogs WHERE id = ?1");
+    statement _query(_implementation->_database, "SELECT revision FROM catalogs WHERE id = ?1");
     _query.bind(1, id);
     if (!_query.next()) {
         return std::nullopt;
     }
-    return _unsigned_integer(_query.integer(0), "Catalog revision");
+    return unsigned_integer(_query.integer(0), "Catalog revision");
 }
 
 std::optional<catalog_snapshot> storage::catalog(std::string_view id) const
 {
-    _require_value(!id.empty(), "Catalog ID cannot be empty");
+    require_value(!id.empty(), "Catalog ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
 
-    _statement _catalog_query(_implementation->_database, R"sql(
+    statement _catalog_query(_implementation->_database, R"sql(
         SELECT owner_instance_id, name, revision
         FROM catalogs
         WHERE id = ?1
@@ -1222,9 +1222,9 @@ std::optional<catalog_snapshot> storage::catalog(std::string_view id) const
     _result.id = std::string(id);
     _result.owner_instance_id = _catalog_query.text(0);
     _result.name = _catalog_query.text(1);
-    _result.revision = _unsigned_integer(_catalog_query.integer(2), "Catalog revision");
+    _result.revision = unsigned_integer(_catalog_query.integer(2), "Catalog revision");
 
-    _statement _track_query(_implementation->_database, R"sql(
+    statement _track_query(_implementation->_database, R"sql(
         SELECT t.id, t.catalog_id, t.file_hash, t.cover_hash,
                t.cover_content_type, t.cover_size, t.extension,
                COALESCE(o.title, t.title),
@@ -1240,26 +1240,26 @@ std::optional<catalog_snapshot> storage::catalog(std::string_view id) const
     )sql");
     _track_query.bind(1, id);
     while (_track_query.next()) {
-        _result.tracks.push_back(_read_track(_track_query));
+        _result.tracks.push_back(read_track(_track_query));
     }
     return _result;
 }
 
 void storage::replace_catalog(const catalog_snapshot& catalog)
 {
-    _require_value(!catalog.id.empty(), "Catalog ID cannot be empty");
-    _require_value(!catalog.owner_instance_id.empty(), "Catalog owner cannot be empty");
-    _require_value(!catalog.name.empty(), "Catalog name cannot be empty");
-    _sqlite_integer(catalog.revision, "Catalog revision");
+    require_value(!catalog.id.empty(), "Catalog ID cannot be empty");
+    require_value(!catalog.owner_instance_id.empty(), "Catalog owner cannot be empty");
+    require_value(!catalog.name.empty(), "Catalog name cannot be empty");
+    sqlite_integer(catalog.revision, "Catalog revision");
     for (const track& _item : catalog.tracks) {
-        _validate_track(_item);
-        _require_value(_item.catalog_id == catalog.id, "Track belongs to a different catalog");
+        validate_track(_item);
+        require_value(_item.catalog_id == catalog.id, "Track belongs to a different catalog");
     }
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
+    transaction _update(_implementation->_database);
 
-    _statement _upsert_catalog(_implementation->_database, R"sql(
+    statement _upsert_catalog(_implementation->_database, R"sql(
         INSERT INTO catalogs(id, owner_instance_id, name, revision)
         VALUES(?1, ?2, ?3, ?4)
         ON CONFLICT(id) DO UPDATE SET
@@ -1270,26 +1270,26 @@ void storage::replace_catalog(const catalog_snapshot& catalog)
     _upsert_catalog.bind(1, catalog.id);
     _upsert_catalog.bind(2, catalog.owner_instance_id);
     _upsert_catalog.bind(3, catalog.name);
-    _upsert_catalog.bind(4, _sqlite_integer(catalog.revision, "Catalog revision"));
+    _upsert_catalog.bind(4, sqlite_integer(catalog.revision, "Catalog revision"));
     _upsert_catalog.execute();
 
-    _statement _delete_tracks(_implementation->_database, "DELETE FROM tracks WHERE catalog_id = ?1");
+    statement _delete_tracks(_implementation->_database, "DELETE FROM tracks WHERE catalog_id = ?1");
     _delete_tracks.bind(1, catalog.id);
     _delete_tracks.execute();
 
-    _statement _insert_track(_implementation->_database, R"sql(
+    statement _insert_track(_implementation->_database, R"sql(
         INSERT INTO tracks(
             id, catalog_id, file_hash, cover_hash, cover_content_type, cover_size,
             extension, title, artist, album, track_number, duration_ms, size)
         VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)
     )sql");
     for (const track& _item : catalog.tracks) {
-        _bind_track(_insert_track, _item);
+        bind_track(_insert_track, _item);
         _insert_track.execute();
         _insert_track.reset();
     }
 
-    _execute(_implementation->_database, R"sql(
+    execute(_implementation->_database, R"sql(
         DELETE FROM covers
         WHERE NOT EXISTS (SELECT 1 FROM tracks WHERE tracks.cover_hash = covers.hash)
     )sql");
@@ -1299,10 +1299,10 @@ void storage::replace_catalog(const catalog_snapshot& catalog)
 
 void storage::add_track(const track& track)
 {
-    _validate_track(track);
+    validate_track(track);
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
-    _statement _upsert(_implementation->_database, R"sql(
+    transaction _update(_implementation->_database);
+    statement _upsert(_implementation->_database, R"sql(
         INSERT INTO tracks(
             id, catalog_id, file_hash, cover_hash, cover_content_type, cover_size,
             extension, title, artist, album, track_number, duration_ms, size)
@@ -1320,23 +1320,23 @@ void storage::add_track(const track& track)
             duration_ms = excluded.duration_ms,
             size = excluded.size
     )sql");
-    _bind_track(_upsert, track);
+    bind_track(_upsert, track);
     _upsert.execute();
 
-    _statement _revise(_implementation->_database, "UPDATE catalogs SET revision = revision + 1 WHERE id = ?1");
+    statement _revise(_implementation->_database, "UPDATE catalogs SET revision = revision + 1 WHERE id = ?1");
     _revise.bind(1, track.catalog_id);
     _revise.execute();
-    _require_value(sqlite3_changes(_implementation->_database) == 1, "Track catalog was not found");
+    require_value(sqlite3_changes(_implementation->_database) == 1, "Track catalog was not found");
     _update.commit();
 }
 
 void storage::remove_track(std::string_view catalog_id, std::string_view track_id)
 {
-    _require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
-    _require_value(!track_id.empty(), "Track ID cannot be empty");
+    require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
+    require_value(!track_id.empty(), "Track ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
-    _statement _remove(_implementation->_database, "DELETE FROM tracks WHERE catalog_id = ?1 AND id = ?2");
+    transaction _update(_implementation->_database);
+    statement _remove(_implementation->_database, "DELETE FROM tracks WHERE catalog_id = ?1 AND id = ?2");
     _remove.bind(1, catalog_id);
     _remove.bind(2, track_id);
     _remove.execute();
@@ -1345,33 +1345,33 @@ void storage::remove_track(std::string_view catalog_id, std::string_view track_i
         return;
     }
 
-    _statement _revise(_implementation->_database, "UPDATE catalogs SET revision = revision + 1 WHERE id = ?1");
+    statement _revise(_implementation->_database, "UPDATE catalogs SET revision = revision + 1 WHERE id = ?1");
     _revise.bind(1, catalog_id);
     _revise.execute();
-    _require_value(sqlite3_changes(_implementation->_database) == 1, "Track catalog was not found");
+    require_value(sqlite3_changes(_implementation->_database) == 1, "Track catalog was not found");
     _update.commit();
 }
 
 void storage::update_track_metadata(std::string_view catalog_id, std::string_view track_id, std::string title, std::string artist, std::string album, std::uint32_t track_number)
 {
-    _require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
-    _require_value(!track_id.empty(), "Track ID cannot be empty");
+    require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
+    require_value(!track_id.empty(), "Track ID cannot be empty");
     constexpr std::size_t _maximum_metadata_size = 1024 * 1024;
-    _require_value(title.size() <= _maximum_metadata_size && artist.size() <= _maximum_metadata_size && album.size() <= _maximum_metadata_size, "Track metadata is too large");
-    _sqlite_integer(track_number, "Track number");
+    require_value(title.size() <= _maximum_metadata_size && artist.size() <= _maximum_metadata_size && album.size() <= _maximum_metadata_size, "Track metadata is too large");
+    sqlite_integer(track_number, "Track number");
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _transaction _update(_implementation->_database);
+    transaction _update(_implementation->_database);
     {
-        _statement _track(_implementation->_database, R"sql(
+        statement _track(_implementation->_database, R"sql(
             SELECT 1 FROM tracks WHERE catalog_id = ?1 AND id = ?2
         )sql");
         _track.bind(1, catalog_id);
         _track.bind(2, track_id);
-        _require_value(_track.next(), "Track was not found");
+        require_value(_track.next(), "Track was not found");
     }
 
-    _statement _override(_implementation->_database, R"sql(
+    statement _override(_implementation->_database, R"sql(
         INSERT INTO track_metadata_overrides(
             catalog_id, track_id, title, artist, album, track_number)
         VALUES(?1, ?2, ?3, ?4, ?5, ?6)
@@ -1386,61 +1386,61 @@ void storage::update_track_metadata(std::string_view catalog_id, std::string_vie
     _override.bind(3, title);
     _override.bind(4, artist);
     _override.bind(5, album);
-    _override.bind(6, _sqlite_integer(track_number, "Track number"));
+    _override.bind(6, sqlite_integer(track_number, "Track number"));
     _override.execute();
 
     const std::optional<std::string> _local_id = _implementation->setting("instance_id");
-    _require_value(_local_id.has_value(), "Storage instance identity is missing");
+    require_value(_local_id.has_value(), "Storage instance identity is missing");
     if (catalog_id == *_local_id) {
-        _statement _revise(_implementation->_database, "UPDATE catalogs SET revision = revision + 1 WHERE id = ?1");
+        statement _revise(_implementation->_database, "UPDATE catalogs SET revision = revision + 1 WHERE id = ?1");
         _revise.bind(1, catalog_id);
         _revise.execute();
-        _require_value(sqlite3_changes(_implementation->_database) == 1, "Track catalog was not found");
+        require_value(sqlite3_changes(_implementation->_database) == 1, "Track catalog was not found");
     }
     _update.commit();
 }
 
 std::optional<file_location> storage::find_file(std::string_view hash) const
 {
-    const std::string _normalized = _normalize_hash(hash);
+    const std::string _normalized = normalize_hash(hash);
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, "SELECT locator, extension, kind, size FROM files WHERE hash = ?1");
+    statement _query(_implementation->_database, "SELECT locator, extension, kind, size FROM files WHERE hash = ?1");
     _query.bind(1, _normalized);
     if (!_query.next()) {
         return std::nullopt;
     }
 
     const sqlite3_int64 _stored_kind = _query.integer(2);
-    _require_value(_stored_kind == 0 || _stored_kind == 1, "Stored file kind is invalid");
+    require_value(_stored_kind == 0 || _stored_kind == 1, "Stored file kind is invalid");
     return file_location {
         _normalized,
         _query.text(0),
-        _stored_extension(_query.text(1)),
+        stored_extension(_query.text(1)),
         static_cast<file_kind>(_stored_kind),
-        _unsigned_integer(_query.integer(3), "File size")
+        unsigned_integer(_query.integer(3), "File size")
     };
 }
 
 std::optional<cover_art> storage::cover(std::string_view hash) const
 {
-    const std::string _normalized = _normalize_hash(hash);
+    const std::string _normalized = normalize_hash(hash);
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, "SELECT content_type, data FROM covers WHERE hash = ?1");
+    statement _query(_implementation->_database, "SELECT content_type, data FROM covers WHERE hash = ?1");
     _query.bind(1, _normalized);
     if (!_query.next()) {
         return std::nullopt;
     }
     cover_art _result { _normalized, _query.text(0), _query.blob(1) };
-    _normalized_cover_type(_result.content_type);
-    _require_value(!_result.bytes.empty() && _result.bytes.size() <= _maximum_cover_size, "Stored cover data is invalid");
-    _require_value(_data_sha256(_result.bytes) == _normalized, "Stored cover data does not match its hash");
+    normalized_cover_type(_result.content_type);
+    require_value(!_result.bytes.empty() && _result.bytes.size() <= maximum_cover_size, "Stored cover data is invalid");
+    require_value(data_sha256(_result.bytes) == _normalized, "Stored cover data does not match its hash");
     return _result;
 }
 
 std::vector<file_location> storage::managed_files() const
 {
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, R"sql(
+    statement _query(_implementation->_database, R"sql(
         SELECT hash, locator, extension, size
         FROM files WHERE kind = 1 ORDER BY hash
     )sql");
@@ -1448,9 +1448,9 @@ std::vector<file_location> storage::managed_files() const
     while (_query.next()) {
         _result.push_back({ _query.text(0),
             _query.text(1),
-            _stored_extension(_query.text(2)),
+            stored_extension(_query.text(2)),
             file_kind::managed,
-            _unsigned_integer(_query.integer(3), "File size") });
+            unsigned_integer(_query.integer(3), "File size") });
     }
     return _result;
 }
@@ -1458,28 +1458,28 @@ std::vector<file_location> storage::managed_files() const
 music_storage_usage storage::music_usage() const
 {
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, R"sql(
+    statement _query(_implementation->_database, R"sql(
         SELECT
             COALESCE(SUM(CASE WHEN kind = 0 THEN size ELSE 0 END), 0),
             COALESCE(SUM(CASE WHEN kind = 1 THEN size ELSE 0 END), 0)
         FROM files
     )sql");
-    _require_value(_query.next(), "Could not calculate music storage usage");
+    require_value(_query.next(), "Could not calculate music storage usage");
     return {
-        _unsigned_integer(_query.integer(0), "Local music storage usage"),
-        _unsigned_integer(_query.integer(1), "Downloaded music storage usage")
+        unsigned_integer(_query.integer(0), "Local music storage usage"),
+        unsigned_integer(_query.integer(1), "Downloaded music storage usage")
     };
 }
 
 void storage::store_cover(const cover_art& cover)
 {
-    const std::string _hash = _normalize_hash(cover.hash);
-    const std::string _content_type = _normalized_cover_type(cover.content_type);
-    _require_value(!cover.bytes.empty() && cover.bytes.size() <= _maximum_cover_size, "Cover data is empty or too large");
-    _require_value(_data_sha256(cover.bytes) == _hash, "Cover data does not match its hash");
+    const std::string _hash = normalize_hash(cover.hash);
+    const std::string _content_type = normalized_cover_type(cover.content_type);
+    require_value(!cover.bytes.empty() && cover.bytes.size() <= maximum_cover_size, "Cover data is empty or too large");
+    require_value(data_sha256(cover.bytes) == _hash, "Cover data does not match its hash");
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _upsert(_implementation->_database, R"sql(
+    statement _upsert(_implementation->_database, R"sql(
         INSERT INTO covers(hash, content_type, data)
         VALUES(?1, ?2, ?3)
         ON CONFLICT(hash) DO UPDATE SET
@@ -1494,13 +1494,13 @@ void storage::store_cover(const cover_art& cover)
 
 void storage::register_external_file(const file_location& file)
 {
-    _require_value(file.kind == file_kind::external, "External file must use external file kind");
-    _require_value(!file.path.empty(), "External file path cannot be empty");
-    const std::string _normalized = _normalize_hash(file.hash);
-    const std::string _extension = _normalized_extension(file.extension);
+    require_value(file.kind == file_kind::external, "External file must use external file kind");
+    require_value(!file.path.empty(), "External file path cannot be empty");
+    const std::string _normalized = normalize_hash(file.hash);
+    const std::string _extension = normalized_extension(file.extension);
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _upsert(_implementation->_database, R"sql(
+    statement _upsert(_implementation->_database, R"sql(
         INSERT INTO files(hash, locator, extension, kind, size)
         VALUES(?1, ?2, ?3, 0, ?4)
         ON CONFLICT(hash) DO UPDATE SET
@@ -1512,15 +1512,15 @@ void storage::register_external_file(const file_location& file)
     _upsert.bind(1, _normalized);
     _upsert.bind(2, file.path);
     _upsert.bind(3, _extension);
-    _upsert.bind(4, _sqlite_integer(file.size_bytes, "File size"));
+    _upsert.bind(4, sqlite_integer(file.size_bytes, "File size"));
     _upsert.execute();
 }
 
 std::vector<track> storage::missing_files(std::string_view catalog_id) const
 {
-    _require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
+    require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, R"sql(
+    statement _query(_implementation->_database, R"sql(
         SELECT t.id, t.catalog_id, t.file_hash, t.cover_hash,
                t.cover_content_type, t.cover_size, t.extension, t.title,
                t.artist, t.album, t.track_number, t.duration_ms, t.size
@@ -1533,7 +1533,7 @@ std::vector<track> storage::missing_files(std::string_view catalog_id) const
 
     std::vector<track> _result;
     while (_query.next()) {
-        _result.push_back(_read_track(_query));
+        _result.push_back(read_track(_query));
     }
     return _result;
 }
@@ -1541,7 +1541,7 @@ std::vector<track> storage::missing_files(std::string_view catalog_id) const
 std::vector<track> storage::requested_offline_tracks() const
 {
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, R"sql(
+    statement _query(_implementation->_database, R"sql(
         SELECT DISTINCT t.id, t.catalog_id, t.file_hash, t.cover_hash,
                t.cover_content_type, t.cover_size, t.extension, t.title,
                t.artist, t.album, t.track_number, t.duration_ms, t.size
@@ -1553,17 +1553,17 @@ std::vector<track> storage::requested_offline_tracks() const
 
     std::vector<track> _result;
     while (_query.next()) {
-        _result.push_back(_read_track(_query));
+        _result.push_back(read_track(_query));
     }
     return _result;
 }
 
 bool storage::track_offline_requested(std::string_view catalog_id, std::string_view track_id) const
 {
-    _require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
-    _require_value(!track_id.empty(), "Track ID cannot be empty");
+    require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
+    require_value(!track_id.empty(), "Track ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, R"sql(
+    statement _query(_implementation->_database, R"sql(
         SELECT 1 FROM offline_tracks
         WHERE catalog_id = ?1 AND track_id = ?2
     )sql");
@@ -1574,11 +1574,11 @@ bool storage::track_offline_requested(std::string_view catalog_id, std::string_v
 
 void storage::set_track_offline(std::string_view catalog_id, std::string_view track_id, bool offline)
 {
-    _require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
-    _require_value(!track_id.empty(), "Track ID cannot be empty");
+    require_value(!catalog_id.empty(), "Catalog ID cannot be empty");
+    require_value(!track_id.empty(), "Track ID cannot be empty");
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
     if (offline) {
-        _statement _insert(_implementation->_database, R"sql(
+        statement _insert(_implementation->_database, R"sql(
             INSERT INTO offline_tracks(catalog_id, track_id)
             VALUES(?1, ?2)
             ON CONFLICT(catalog_id, track_id) DO NOTHING
@@ -1587,7 +1587,7 @@ void storage::set_track_offline(std::string_view catalog_id, std::string_view tr
         _insert.bind(2, track_id);
         _insert.execute();
     } else {
-        _statement _remove(_implementation->_database, R"sql(
+        statement _remove(_implementation->_database, R"sql(
             DELETE FROM offline_tracks
             WHERE catalog_id = ?1 AND track_id = ?2
         )sql");
@@ -1599,7 +1599,7 @@ void storage::set_track_offline(std::string_view catalog_id, std::string_view tr
 
 std::filesystem::path storage::partial_path(std::string_view hash) const
 {
-    const std::string _normalized = _normalize_hash(hash);
+    const std::string _normalized = normalize_hash(hash);
     return _implementation->_asset_directory / ".partial" / (_normalized + ".part");
 }
 
@@ -1607,8 +1607,8 @@ std::filesystem::path storage::managed_path(
     std::string_view hash,
     audio_extension extension) const
 {
-    const std::string _normalized = _normalize_hash(hash);
-    const std::string _file_name = _normalized + "." + _normalized_extension(extension);
+    const std::string _normalized = normalize_hash(hash);
+    const std::string _file_name = _normalized + "." + normalized_extension(extension);
     return _implementation->_asset_directory / _normalized.substr(0, 2) / _file_name;
 }
 
@@ -1617,14 +1617,14 @@ void storage::commit_download(
     audio_extension extension,
     std::uint64_t expected_size)
 {
-    const std::string _normalized = _normalize_hash(hash);
-    const std::string _extension_name = _normalized_extension(extension);
-    _sqlite_integer(expected_size, "File size");
+    const std::string _normalized = normalize_hash(hash);
+    const std::string _extension_name = normalized_extension(extension);
+    sqlite_integer(expected_size, "File size");
     const std::filesystem::path _partial = partial_path(_normalized);
     const std::filesystem::path _destination = managed_path(_normalized, extension);
 
     std::error_code _filesystem_error;
-    _require_value(std::filesystem::is_regular_file(_partial, _filesystem_error), "Partial download does not exist");
+    require_value(std::filesystem::is_regular_file(_partial, _filesystem_error), "Partial download does not exist");
     if (_filesystem_error) {
         throw storage_error("Could not inspect partial download: " + _filesystem_error.message());
     }
@@ -1633,8 +1633,8 @@ void storage::commit_download(
     if (_filesystem_error) {
         throw storage_error("Could not read partial download size: " + _filesystem_error.message());
     }
-    _require_value(_actual_size == expected_size, "Downloaded file size does not match catalog");
-    _require_value(_file_sha256(_partial) == _normalized, "Downloaded file hash does not match catalog");
+    require_value(_actual_size == expected_size, "Downloaded file size does not match catalog");
+    require_value(file_sha256(_partial) == _normalized, "Downloaded file hash does not match catalog");
 
     std::filesystem::create_directories(_destination.parent_path(), _filesystem_error);
     if (_filesystem_error) {
@@ -1645,8 +1645,8 @@ void storage::commit_download(
         if (_filesystem_error) {
             throw storage_error("Could not inspect managed asset: " + _filesystem_error.message());
         }
-        _require_value(
-            std::filesystem::file_size(_destination, _filesystem_error) == expected_size && !_filesystem_error && _file_sha256(_destination) == _normalized,
+        require_value(
+            std::filesystem::file_size(_destination, _filesystem_error) == expected_size && !_filesystem_error && file_sha256(_destination) == _normalized,
             "Existing managed asset does not match its content hash");
         std::filesystem::remove(_partial, _filesystem_error);
         if (_filesystem_error) {
@@ -1660,7 +1660,7 @@ void storage::commit_download(
     }
 
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _upsert(_implementation->_database, R"sql(
+    statement _upsert(_implementation->_database, R"sql(
         INSERT INTO files(hash, locator, extension, kind, size)
         VALUES(?1, ?2, ?3, 1, ?4)
         ON CONFLICT(hash) DO UPDATE SET
@@ -1670,22 +1670,22 @@ void storage::commit_download(
             size = excluded.size
     )sql");
     _upsert.bind(1, _normalized);
-    _upsert.bind(2, _path_string(_destination));
+    _upsert.bind(2, path_string(_destination));
     _upsert.bind(3, _extension_name);
-    _upsert.bind(4, _sqlite_integer(expected_size, "File size"));
+    _upsert.bind(4, sqlite_integer(expected_size, "File size"));
     _upsert.execute();
 }
 
 void storage::remove_managed_file(std::string_view hash)
 {
-    const std::string _normalized = _normalize_hash(hash);
+    const std::string _normalized = normalize_hash(hash);
     std::lock_guard<std::mutex> _lock(_implementation->_mutex);
-    _statement _query(_implementation->_database, "SELECT locator, kind FROM files WHERE hash = ?1");
+    statement _query(_implementation->_database, "SELECT locator, kind FROM files WHERE hash = ?1");
     _query.bind(1, _normalized);
     if (!_query.next()) {
         return;
     }
-    _require_value(_query.integer(1) == static_cast<sqlite3_int64>(file_kind::managed), "External library files cannot be removed by offline storage");
+    require_value(_query.integer(1) == static_cast<sqlite3_int64>(file_kind::managed), "External library files cannot be removed by offline storage");
 
     const std::filesystem::path _path = std::filesystem::u8path(_query.text(0));
     std::error_code _filesystem_error;
@@ -1693,9 +1693,9 @@ void storage::remove_managed_file(std::string_view hash)
     if (_filesystem_error) {
         throw storage_error("Could not remove managed asset: " + _filesystem_error.message());
     }
-    _require_value(_removed || !std::filesystem::exists(_path), "Managed asset could not be removed");
+    require_value(_removed || !std::filesystem::exists(_path), "Managed asset could not be removed");
 
-    _statement _remove(_implementation->_database, "DELETE FROM files WHERE hash = ?1 AND kind = 1");
+    statement _remove(_implementation->_database, "DELETE FROM files WHERE hash = ?1 AND kind = 1");
     _remove.bind(1, _normalized);
     _remove.execute();
 }

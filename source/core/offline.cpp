@@ -22,22 +22,22 @@
 namespace soundstep {
 namespace {
 
-    struct _offline_entry {
-        offline_state _state { offline_state::off };
-        std::uint64_t _downloaded_bytes { 0 };
-        std::uint64_t _total_bytes { 0 };
-        std::uint64_t _request_id { 0 };
-        bool _requested { false };
-        std::string _error;
+    struct offline_entry {
+        offline_state state { offline_state::off };
+        std::uint64_t downloaded_bytes { 0 };
+        std::uint64_t total_bytes { 0 };
+        std::uint64_t request_id { 0 };
+        bool requested { false };
+        std::string error;
     };
 
-    struct _offline_task {
-        track _track;
-        peer_record _peer;
-        std::uint64_t _request_id { 0 };
+    struct offline_task {
+        track saved_track;
+        peer_record peer;
+        std::uint64_t request_id { 0 };
     };
 
-    std::string _peer_error_message(const peer_response& response)
+    [[nodiscard]] std::string peer_error_message(const peer_response& response)
     {
         if (!response.error_message.empty()) {
             return response.error_message;
@@ -123,12 +123,12 @@ struct offline_service::implementation {
         }
 
         std::lock_guard<std::mutex> _lock(_mutex);
-        const std::unordered_map<std::string, _offline_entry>::iterator _entry = _entries.find(value.file_hash);
-        const bool _downloading = _entry != _entries.end() && _entry->second._state == offline_state::downloading;
+        const std::unordered_map<std::string, offline_entry>::iterator _entry = _entries.find(value.file_hash);
+        const bool _downloading = _entry != _entries.end() && _entry->second.state == offline_state::downloading;
         if (_entry != _entries.end()) {
-            _entry->second._requested = false;
-            _entry->second._state = offline_state::off;
-            _entry->second._error.clear();
+            _entry->second.requested = false;
+            _entry->second.state = offline_state::off;
+            _entry->second.error.clear();
         }
 
         if (_file) {
@@ -158,17 +158,17 @@ struct offline_service::implementation {
         }
 
         std::lock_guard<std::mutex> _lock(_mutex);
-        const std::unordered_map<std::string, _offline_entry>::const_iterator _entry = _entries.find(value.file_hash);
-        if (_entry == _entries.end() || !_entry->second._requested) {
+        const std::unordered_map<std::string, offline_entry>::const_iterator _entry = _entries.find(value.file_hash);
+        if (_entry == _entries.end() || !_entry->second.requested) {
             return { offline_state::off, 0, value.size_bytes, false, _requested, { } };
         }
         return {
-            _entry->second._state,
-            _entry->second._downloaded_bytes,
-            _entry->second._total_bytes,
+            _entry->second.state,
+            _entry->second.downloaded_bytes,
+            _entry->second.total_bytes,
             false,
             _requested,
-            _entry->second._error
+            _entry->second.error
         };
     }
 
@@ -186,14 +186,14 @@ struct offline_service::implementation {
                 const bool _audio_available = _store.find_file(_track.file_hash).has_value();
                 const bool _cover_available = _track.cover_hash.empty()
                     || _store.cover(_track.cover_hash).has_value();
-                const std::unordered_map<std::string, _offline_entry>::iterator _existing = _entries.find(_track.file_hash);
+                const std::unordered_map<std::string, offline_entry>::iterator _existing = _entries.find(_track.file_hash);
                 if (_audio_available && _cover_available) {
-                    _entries.insert_or_assign(_track.file_hash, _offline_entry { offline_state::on, _track.size_bytes, _track.size_bytes, _existing == _entries.end() ? 0 : _existing->second._request_id, true, { } });
+                    _entries.insert_or_assign(_track.file_hash, offline_entry { offline_state::on, _track.size_bytes, _track.size_bytes, _existing == _entries.end() ? 0 : _existing->second.request_id, true, { } });
                     continue;
                 }
                 if (_existing != _entries.end()
-                    && _existing->second._requested
-                    && _existing->second._state == offline_state::downloading) {
+                    && _existing->second.requested
+                    && _existing->second.state == offline_state::downloading) {
                     continue;
                 }
 
@@ -205,23 +205,23 @@ struct offline_service::implementation {
                     }
                 }
                 if (_owner == nullptr || _owner->token.empty() || _owner->fingerprint.empty() || _owner->endpoints.empty()) {
-                    _entries.insert_or_assign(_track.file_hash, _offline_entry { offline_state::failed, 0, _track.size_bytes, 0, true, "The catalog owner is not currently reachable" });
+                    _entries.insert_or_assign(_track.file_hash, offline_entry { offline_state::failed, 0, _track.size_bytes, 0, true, "The catalog owner is not currently reachable" });
                     continue;
                 }
 
                 const std::uint64_t _request_id = ++_next_request_id;
-                _entries.insert_or_assign(_track.file_hash, _offline_entry { offline_state::downloading, 0, _track.size_bytes, _request_id, true, { } });
+                _entries.insert_or_assign(_track.file_hash, offline_entry { offline_state::downloading, 0, _track.size_bytes, _request_id, true, { } });
                 _queue.push_back({ _track, *_owner, _request_id });
             }
 
-            for (std::unordered_map<std::string, _offline_entry>::iterator _entry = _entries.begin();
+            for (std::unordered_map<std::string, offline_entry>::iterator _entry = _entries.begin();
                 _entry != _entries.end();) {
                 if (_requested_hashes.find(_entry->first) != _requested_hashes.end()) {
                     ++_entry;
                     continue;
                 }
-                if (_entry->second._state == offline_state::downloading) {
-                    _entry->second._requested = false;
+                if (_entry->second.state == offline_state::downloading) {
+                    _entry->second.requested = false;
                     ++_entry;
                 } else {
                     _entry = _entries.erase(_entry);
@@ -240,45 +240,45 @@ struct offline_service::implementation {
     bool requested(std::string_view hash, std::uint64_t request_id) const
     {
         std::lock_guard<std::mutex> _lock(_mutex);
-        const std::unordered_map<std::string, _offline_entry>::const_iterator _entry = _entries.find(std::string(hash));
+        const std::unordered_map<std::string, offline_entry>::const_iterator _entry = _entries.find(std::string(hash));
         return !_stop
             && _entry != _entries.end()
-            && _entry->second._request_id == request_id
-            && _entry->second._requested;
+            && _entry->second.request_id == request_id
+            && _entry->second.requested;
     }
 
     void update_progress(std::string_view hash, std::uint64_t request_id, std::uint64_t downloaded_bytes)
     {
         std::lock_guard<std::mutex> _lock(_mutex);
-        const std::unordered_map<std::string, _offline_entry>::iterator _entry = _entries.find(std::string(hash));
-        if (_entry != _entries.end() && _entry->second._request_id == request_id) {
-            _entry->second._downloaded_bytes = downloaded_bytes;
+        const std::unordered_map<std::string, offline_entry>::iterator _entry = _entries.find(std::string(hash));
+        if (_entry != _entries.end() && _entry->second.request_id == request_id) {
+            _entry->second.downloaded_bytes = downloaded_bytes;
         }
     }
 
-    void fail(const _offline_task& task, std::string message)
+    void fail(const offline_task& task, std::string message)
     {
         std::lock_guard<std::mutex> _lock(_mutex);
-        const std::unordered_map<std::string, _offline_entry>::iterator _entry = _entries.find(task._track.file_hash);
-        if (_entry == _entries.end() || _entry->second._request_id != task._request_id) {
+        const std::unordered_map<std::string, offline_entry>::iterator _entry = _entries.find(task.saved_track.file_hash);
+        if (_entry == _entries.end() || _entry->second.request_id != task.request_id) {
             return;
         }
-        if (!_entry->second._requested || _stop) {
+        if (!_entry->second.requested || _stop) {
             return;
         }
-        _entry->second._state = offline_state::failed;
-        _entry->second._error = std::move(message);
+        _entry->second.state = offline_state::failed;
+        _entry->second.error = std::move(message);
     }
 
-    void cancel(const _offline_task& task, bool remove_partial)
+    void cancel(const offline_task& task, bool remove_partial)
     {
         bool _current_cancelled_request = false;
         {
             std::lock_guard<std::mutex> _lock(_mutex);
-            const std::unordered_map<std::string, _offline_entry>::iterator _entry = _entries.find(task._track.file_hash);
+            const std::unordered_map<std::string, offline_entry>::iterator _entry = _entries.find(task.saved_track.file_hash);
             if (_entry != _entries.end()
-                && _entry->second._request_id == task._request_id
-                && !_entry->second._requested) {
+                && _entry->second.request_id == task.request_id
+                && !_entry->second.requested) {
                 _entries.erase(_entry);
                 _current_cancelled_request = true;
             }
@@ -286,37 +286,37 @@ struct offline_service::implementation {
 
         if (_current_cancelled_request && remove_partial) {
             std::error_code _filesystem_error;
-            std::filesystem::remove(_store.partial_path(task._track.file_hash), _filesystem_error);
+            std::filesystem::remove(_store.partial_path(task.saved_track.file_hash), _filesystem_error);
         }
     }
 
-    void download(const _offline_task& task)
+    void download(const offline_task& task)
     {
-        const std::filesystem::path _partial = _store.partial_path(task._track.file_hash);
+        const std::filesystem::path _partial = _store.partial_path(task.saved_track.file_hash);
         std::error_code _filesystem_error;
         std::uint64_t _offset = std::filesystem::exists(_partial, _filesystem_error) ? std::filesystem::file_size(_partial, _filesystem_error) : 0;
         if (_filesystem_error) {
             throw offline_error("Could not inspect partial download: " + _filesystem_error.message());
         }
-        if (_offset > task._track.size_bytes) {
+        if (_offset > task.saved_track.size_bytes) {
             std::filesystem::remove(_partial, _filesystem_error);
             if (_filesystem_error) {
                 throw offline_error("Could not discard invalid partial download: " + _filesystem_error.message());
             }
             _offset = 0;
         }
-        update_progress(task._track.file_hash, task._request_id, _offset);
+        update_progress(task.saved_track.file_hash, task.request_id, _offset);
 
-        peer_client _client(_store, task._peer);
-        if (_offset < task._track.size_bytes) {
+        peer_client _client(_store, task.peer);
+        if (_offset < task.saved_track.size_bytes) {
             std::ofstream _output(_partial, std::ios::binary | (_offset == 0 ? std::ios::trunc : std::ios::app));
             if (!_output) {
                 throw offline_error("Could not open partial download for writing");
             }
 
             std::uint64_t _downloaded_bytes = _offset;
-            peer_response _response = _client.stream_asset(task._track.file_hash, [this, &task, &_output, &_downloaded_bytes](const char* data, std::size_t size) {
-                    if (!requested(task._track.file_hash, task._request_id)) {
+            peer_response _response = _client.stream_asset(task.saved_track.file_hash, [this, &task, &_output, &_downloaded_bytes](const char* data, std::size_t size) {
+                    if (!requested(task.saved_track.file_hash, task.request_id)) {
                         return false;
                     }
                     _output.write(data, static_cast<std::streamsize>(size));
@@ -324,54 +324,54 @@ struct offline_service::implementation {
                         return false;
                     }
                     _downloaded_bytes += size;
-                    update_progress(task._track.file_hash, task._request_id, _downloaded_bytes);
-                    return true; }, _offset, task._track.size_bytes - _offset);
+                    update_progress(task.saved_track.file_hash, task.request_id, _downloaded_bytes);
+                    return true; }, _offset, task.saved_track.size_bytes - _offset);
             _output.flush();
-            if (!_output && requested(task._track.file_hash, task._request_id)) {
+            if (!_output && requested(task.saved_track.file_hash, task.request_id)) {
                 throw offline_error("Could not write partial download");
             }
             _output.close();
 
-            if (!requested(task._track.file_hash, task._request_id)) {
+            if (!requested(task.saved_track.file_hash, task.request_id)) {
                 cancel(task, true);
                 return;
             }
             if (!_response) {
-                throw offline_error("Could not download audio asset: " + _peer_error_message(_response));
+                throw offline_error("Could not download audio asset: " + peer_error_message(_response));
             }
         }
 
-        if (!task._track.cover_hash.empty()
-            && !_store.cover(task._track.cover_hash)) {
-            const peer_response _cover_response = _client.fetch_cover(task._track.cover_hash);
+        if (!task.saved_track.cover_hash.empty()
+            && !_store.cover(task.saved_track.cover_hash)) {
+            const peer_response _cover_response = _client.fetch_cover(task.saved_track.cover_hash);
             if (!_cover_response
-                || _cover_response.body.size() != task._track.cover_size_bytes
-                || data_fingerprint(_cover_response.body) != task._track.cover_hash) {
+                || _cover_response.body.size() != task.saved_track.cover_size_bytes
+                || data_fingerprint(_cover_response.body) != task.saved_track.cover_hash) {
                 throw offline_error("Could not download the track cover");
             }
             const std::vector<unsigned char> _cover_data(_cover_response.body.begin(), _cover_response.body.end());
-            _store.store_cover({ task._track.cover_hash, task._track.cover_content_type, _cover_data });
+            _store.store_cover({ task.saved_track.cover_hash, task.saved_track.cover_content_type, _cover_data });
         }
 
         bool _remove_cancelled_partial = false;
         {
             std::lock_guard<std::mutex> _lock(_mutex);
-            const std::unordered_map<std::string, _offline_entry>::iterator _entry = _entries.find(task._track.file_hash);
-            if (_entry == _entries.end() || _entry->second._request_id != task._request_id) {
+            const std::unordered_map<std::string, offline_entry>::iterator _entry = _entries.find(task.saved_track.file_hash);
+            if (_entry == _entries.end() || _entry->second.request_id != task.request_id) {
                 return;
             }
-            if (!_entry->second._requested) {
+            if (!_entry->second.requested) {
                 _entries.erase(_entry);
                 _remove_cancelled_partial = true;
             } else if (_stop) {
                 return;
             } else {
-                if (!_store.find_file(task._track.file_hash)) {
-                    _store.commit_download(task._track.file_hash, task._track.extension, task._track.size_bytes);
+                if (!_store.find_file(task.saved_track.file_hash)) {
+                    _store.commit_download(task.saved_track.file_hash, task.saved_track.extension, task.saved_track.size_bytes);
                 }
-                _entry->second._state = offline_state::on;
-                _entry->second._downloaded_bytes = task._track.size_bytes;
-                _entry->second._error.clear();
+                _entry->second.state = offline_state::on;
+                _entry->second.downloaded_bytes = task.saved_track.size_bytes;
+                _entry->second.error.clear();
             }
         }
 
@@ -383,7 +383,7 @@ struct offline_service::implementation {
     void run() noexcept
     {
         while (true) {
-            _offline_task _task;
+            offline_task _task;
             {
                 std::unique_lock<std::mutex> _lock(_mutex);
                 _condition.wait_for(_lock, std::chrono::seconds(30), [this] {
@@ -404,7 +404,7 @@ struct offline_service::implementation {
                 _queue.pop_front();
             }
 
-            if (!requested(_task._track.file_hash, _task._request_id)) {
+            if (!requested(_task.saved_track.file_hash, _task.request_id)) {
                 cancel(_task, true);
                 continue;
             }
@@ -421,8 +421,8 @@ struct offline_service::implementation {
     storage& _store;
     mutable std::mutex _mutex;
     std::condition_variable _condition;
-    std::deque<_offline_task> _queue;
-    std::unordered_map<std::string, _offline_entry> _entries;
+    std::deque<offline_task> _queue;
+    std::unordered_map<std::string, offline_entry> _entries;
     std::uint64_t _next_request_id { 0 };
     bool _stop { false };
     std::thread _worker;

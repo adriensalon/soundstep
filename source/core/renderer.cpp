@@ -43,7 +43,7 @@ namespace {
 #define SOUNDSTEP_GLSL_PRECISION ""
 #endif
 
-    constexpr const char* _background_vertex_shader = SOUNDSTEP_GLSL_VERSION R"glsl(
+    constexpr const char* background_vertex_shader = SOUNDSTEP_GLSL_VERSION R"glsl(
 
 out vec2 vertex_uv;
 
@@ -62,7 +62,7 @@ void main()
 }
 )glsl";
 
-    constexpr const char* _background_fragment_shader = SOUNDSTEP_GLSL_VERSION SOUNDSTEP_GLSL_PRECISION R"glsl(
+    constexpr const char* background_fragment_shader = SOUNDSTEP_GLSL_VERSION SOUNDSTEP_GLSL_PRECISION R"glsl(
 
 in vec2 vertex_uv;
 out vec4 fragment_color;
@@ -162,7 +162,7 @@ void main()
 #undef SOUNDSTEP_GLSL_PRECISION
 #undef SOUNDSTEP_GLSL_VERSION
 
-    GLuint _compile_shader(GLenum type, const char* source)
+    [[nodiscard]] GLuint compile_shader(GLenum type, const char* source)
     {
         const GLuint _shader = glCreateShader(type);
         if (_shader == 0) {
@@ -186,13 +186,13 @@ void main()
         throw renderer_error(_message);
     }
 
-    GLuint _create_background_program()
+    [[nodiscard]] GLuint create_background_program()
     {
-        const GLuint _vertex = _compile_shader(GL_VERTEX_SHADER, _background_vertex_shader);
+        const GLuint _vertex = compile_shader(GL_VERTEX_SHADER, background_vertex_shader);
         GLuint _fragment = 0;
         GLuint _program = 0;
         try {
-            _fragment = _compile_shader(GL_FRAGMENT_SHADER, _background_fragment_shader);
+            _fragment = compile_shader(GL_FRAGMENT_SHADER, background_fragment_shader);
             _program = glCreateProgram();
             if (_program == 0) {
                 throw renderer_error("Could not create the background shader program");
@@ -228,13 +228,13 @@ void main()
         return _program;
     }
 
-    float _smoothed_level(float current, float target, float attack, float release, float delta_time)
+    [[nodiscard]] float smoothed_level(float current, float target, float attack, float release, float delta_time)
     {
         const float _rate = target > current ? attack : release;
         return current + (target - current) * (1.0f - std::exp(-_rate * delta_time));
     }
 
-    void _apply_dark_grey_palette()
+    void apply_dark_grey_palette()
     {
         ImVec4* _colors = ImGui::GetStyle().Colors;
         _colors[ImGuiCol_Border] = ImVec4(0.30f, 0.30f, 0.30f, 0.65f);
@@ -269,13 +269,9 @@ void main()
         _colors[ImGuiCol_ModalWindowDimBg] = ImVec4(0.0f, 0.0f, 0.0f, 0.86f);
     }
 
-}
-
-namespace {
-
     struct background_program {
         background_program()
-            : _program(_create_background_program())
+            : _program(create_background_program())
         {
             glGenVertexArrays(1, &_vertex_array);
             if (_vertex_array == 0) {
@@ -322,12 +318,12 @@ namespace {
             const float _mid_target = (std::clamp)(playback.mid_level * 4.2f, 0.0f, 1.0f);
             const float _treble_target = (std::clamp)(playback.treble_level * 5.5f, 0.0f, 1.0f);
 
-            _activity = _smoothed_level(_activity, _activity_target, 7.5f, 2.0f, _dt);
-            _rms = _smoothed_level(_rms, _rms_target, 12.0f, 3.0f, _dt);
-            _peak = _smoothed_level(_peak, _peak_target, 18.0f, 4.5f, _dt);
-            _bass = _smoothed_level(_bass, _bass_target, 11.0f, 2.6f, _dt);
-            _mid = _smoothed_level(_mid, _mid_target, 10.0f, 3.2f, _dt);
-            _treble = _smoothed_level(_treble, _treble_target, 15.0f, 5.0f, _dt);
+            _activity = smoothed_level(_activity, _activity_target, 7.5f, 2.0f, _dt);
+            _rms = smoothed_level(_rms, _rms_target, 12.0f, 3.0f, _dt);
+            _peak = smoothed_level(_peak, _peak_target, 18.0f, 4.5f, _dt);
+            _bass = smoothed_level(_bass, _bass_target, 11.0f, 2.6f, _dt);
+            _mid = smoothed_level(_mid, _mid_target, 10.0f, 3.2f, _dt);
+            _treble = smoothed_level(_treble, _treble_target, 15.0f, 5.0f, _dt);
 
             _beat_cooldown = (std::max)(0.0f, _beat_cooldown - _dt);
             if (_activity_target > 0.9f && _bass_target - _previous_bass_target > 0.075f && _peak_target > 0.20f && _beat_cooldown <= 0.0f) {
@@ -424,7 +420,7 @@ renderer::renderer(std::shared_ptr<GLFWwindow> window)
     ImGui::CreateContext();
     ImGui::GetIO().IniFilename = nullptr;
     ImGui::StyleColorsDark();
-    _apply_dark_grey_palette();
+    apply_dark_grey_palette();
     ImGuiStyle& _style = ImGui::GetStyle();
     _style.FramePadding = ImVec2(5.0f, 5.0f);
     constexpr float _rounding = 6.0f;
